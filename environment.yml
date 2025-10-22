@@ -1,0 +1,7 @@
+name: cine_reco
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - ipykernel
+prefix: /home/gabriel/anaconda3/envs/cine_reco
