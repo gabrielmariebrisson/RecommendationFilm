@@ -441,7 +441,6 @@ else:
 st.markdown("---")
 st.markdown(_(
     """
-    ---
     Développé par [Gabriel Marie-Brisson](https://gabriel.mariebrisson.fr)
     """
 ))
