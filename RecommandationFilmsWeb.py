@@ -438,6 +438,7 @@ else:
     st.error(_("L'application n'a pas pu démarrer. Vérifiez les fichiers du modèle et des données."))
 
 # Footer
+st.markdown("---")
 st.markdown(_(
     """
     ---
