@@ -236,7 +236,7 @@ if model and movie_dict:
         if filtered_movie_list:
             selected_movie_title = st.selectbox(_("Choisissez un film"), filtered_movie_list)
         else:
-            st.warning(_("Aucun film trouvé avec cette recherche"))
+            st.warning(_("Aucun film trouvé pour cette recherche. Essaie avec un titre en anglais ou un film sorti avant 2024."))
             selected_movie_title = None
             
         rating = st.slider(_("Votre note"), 1.0, 5.0, 3.0, 0.5)
