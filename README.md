@@ -201,6 +201,35 @@ This enables immediate personalized recommendations even for new users.
 
 ### Installation
 
+#### Option 1: Docker (Recommended)
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd RecommendationFilm
+   ```
+
+2. **Set up environment variables**
+   ```bash
+   # Create a .env file
+   echo "API_KEY_FILM=your_omdb_api_key" > .env
+   ```
+
+3. **Build and run with Docker Compose**
+   ```bash
+   docker-compose up --build
+   ```
+
+   Or with Docker directly:
+   ```bash
+   docker build -t cinereco-app .
+   docker run -p 8501:8501 --env-file .env cinereco-app
+   ```
+
+   The application will be available at `http://localhost:8501`
+
+#### Option 2: Local Installation
+
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
@@ -238,9 +267,24 @@ This enables immediate personalized recommendations even for new users.
 
 ### Usage
 
+#### Docker (Recommended)
+
+**Run with Docker Compose:**
+```bash
+docker-compose up
+```
+
+**Or with Docker directly:**
+```bash
+docker build -t cinereco-app .
+docker run -p 8501:8501 --env-file .env cinereco-app
+```
+
+#### Local
+
 **Run the Streamlit application:**
 ```bash
-streamlit run app.py
+streamlit run RecommandationFilmsWeb.py
 ```
 
 The application will be available at `http://localhost:8501`
@@ -251,7 +295,100 @@ The application will be available at `http://localhost:8501`
 3. Filter recommendations by genre
 4. Explore detailed movie information (actors, plot, IMDb rating)
 
+## 🐳 Docker Deployment
+
+### Quick Start
+
+```bash
+# Build and run with Docker Compose
+docker-compose up --build
+
+# Or build manually
+docker build -t cinereco-app .
+docker run -p 8501:8501 --env-file .env cinereco-app
+```
+
+### Docker Compose
+
+The `docker-compose.yml` file provides a complete setup:
+
+```bash
+# Start services
+docker-compose up
+
+# Start in detached mode
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+### Docker Image Details
+
+- **Base Image**: Python 3.11-slim (optimized size)
+- **Multi-stage Build**: Reduces final image size
+- **Non-root User**: Runs as `appuser` for security
+- **Health Check**: Automatic health monitoring
+- **Port**: 8501 (Streamlit default)
+
+### Environment Variables
+
+Create a `.env` file or pass environment variables:
+
+```bash
+# .env file
+API_KEY_FILM=your_omdb_api_key
+```
+
+Or pass directly:
+```bash
+docker run -p 8501:8501 -e API_KEY_FILM=your_key cinereco-app
+```
+
+### Volumes
+
+Model files are mounted as read-only volumes:
+- `./templates/assets/film:/app/templates/assets/film:ro`
+
+This allows updating models without rebuilding the image.
+
+### Production Deployment
+
+For production, consider:
+
+1. **Use a reverse proxy** (nginx, Traefik)
+2. **Add SSL/TLS** certificates
+3. **Set resource limits** in docker-compose.yml
+4. **Use Docker secrets** for sensitive data
+5. **Enable logging** aggregation
+
+Example production docker-compose:
+
+```yaml
+services:
+  recommendation-app:
+    # ... existing config ...
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
 ### Development
+
+**Run tests:**
 
 **Run tests:**
 ```bash
