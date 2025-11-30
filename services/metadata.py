@@ -1,30 +1,37 @@
 """Module contenant les services pour les métadonnées de films et la traduction."""
 
-import os
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+
 import requests
-from typing import Optional, Dict, Any
 from deep_translator import GoogleTranslator
 import streamlit as st
-from dotenv import load_dotenv
 
-load_dotenv()
+from config import (
+    API_KEY_FILM,
+    OMDB_API_URL,
+    OMDB_API_TIMEOUT,
+    LANGUAGES,
+    DEFAULT_LANGUAGE,
+    CACHE_TTL_SECONDS,
+)
 
 
 class MetadataService:
     """Service pour récupérer les métadonnées de films via l'API OMDb."""
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None) -> None:
         """
         Initialise le service de métadonnées.
         
         Args:
             api_key: Clé API OMDb. Si None, récupère depuis les variables d'environnement.
         """
-        self.api_key = api_key or os.getenv('API_KEY_FILM')
+        self.api_key: Optional[str] = api_key or API_KEY_FILM
         if not self.api_key:
             st.warning("Clé API OMDb non trouvée. Les métadonnées de films ne seront pas disponibles.")
     
-    @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=CACHE_TTL_SECONDS)
     def get_movie_data(self, title: str) -> Optional[Dict[str, Any]]:
         """
         Récupère les informations d'un film depuis l'API OMDb.
@@ -39,37 +46,51 @@ class MetadataService:
         if not self.api_key:
             return None
         
-        year = None
-        clean_title = title
+        year: Optional[str] = None
+        clean_title: str = title
         
         # Extraction de l'année si présente dans le titre
-        if title[-1] == ")" and "(" in title:
+        if title and title[-1] == ")" and "(" in title:
             try:
                 year = title.split("(")[-1][:-1]
                 clean_title = title.rsplit("(", 1)[0].strip()
-            except:
-                pass
+            except (IndexError, AttributeError) as e:
+                # Si l'extraction échoue, on continue avec le titre original
+                st.debug(f"Impossible d'extraire l'année du titre '{title}': {e}")
         
         # Construction de l'URL
-        url = f"http://www.omdbapi.com/?t={clean_title}&apikey={self.api_key}"
+        url: str = f"{OMDB_API_URL}?t={clean_title}&apikey={self.api_key}"
         if year:
             url += f"&y={year}"
         
         try:
-            response = requests.get(url, timeout=10).json()
-            if response.get("Response") == "True":
+            response: requests.Response = requests.get(url, timeout=OMDB_API_TIMEOUT)
+            response.raise_for_status()
+            data: Dict[str, Any] = response.json()
+            
+            if data.get("Response") == "True":
                 return {
-                    "title": response["Title"],
-                    "year": response["Year"],
-                    "genre": response.get("Genre", "N/A"),
-                    "director": response.get("Director", "N/A"),
-                    "actors": response.get("Actors", "N/A"),
-                    "plot": response.get("Plot", "N/A"),
-                    "rating": response.get("imdbRating", "N/A"),
-                    "votes": response.get("imdbVotes", "0"),
-                    "poster": response.get("Poster", None),
+                    "title": data.get("Title", "N/A"),
+                    "year": data.get("Year", "N/A"),
+                    "genre": data.get("Genre", "N/A"),
+                    "director": data.get("Director", "N/A"),
+                    "actors": data.get("Actors", "N/A"),
+                    "plot": data.get("Plot", "N/A"),
+                    "rating": data.get("imdbRating", "N/A"),
+                    "votes": data.get("imdbVotes", "0"),
+                    "poster": data.get("Poster", None),
                 }
-        except requests.RequestException:
+        except requests.exceptions.Timeout:
+            st.debug(f"Timeout lors de la requête OMDb pour '{title}'")
+            return None
+        except requests.exceptions.HTTPError as e:
+            st.debug(f"Erreur HTTP lors de la requête OMDb pour '{title}': {e}")
+            return None
+        except requests.exceptions.RequestException as e:
+            st.debug(f"Erreur de requête OMDb pour '{title}': {e}")
+            return None
+        except (KeyError, ValueError) as e:
+            st.debug(f"Erreur lors du parsing de la réponse OMDb pour '{title}': {e}")
             return None
         
         return None
@@ -78,31 +99,17 @@ class MetadataService:
 class TranslationService:
     """Service pour la traduction automatique avec cache."""
     
-    # Configuration des langues disponibles
-    LANGUAGES = {
-        "fr": "🇫🇷 Français",
-        "en": "🇬🇧 English",
-        "es": "🇪🇸 Español",
-        "de": "🇩🇪 Deutsch",
-        "it": "🇮🇹 Italiano",
-        "pt": "🇵🇹 Português",
-        "ja": "🇯🇵 日本語",
-        "zh-CN": "🇨🇳 中文",
-        "ar": "🇸🇦 العربية",
-        "ru": "🇷🇺 Русский"
-    }
-    
-    def __init__(self, default_language: str = 'fr'):
+    def __init__(self, default_language: str = DEFAULT_LANGUAGE) -> None:
         """
         Initialise le service de traduction.
         
         Args:
             default_language: Langue par défaut (code ISO)
         """
-        self.default_language = default_language
+        self.default_language: str = default_language
         self._initialize_cache()
     
-    def _initialize_cache(self):
+    def _initialize_cache(self) -> None:
         """Initialise le cache de traductions dans session_state si nécessaire."""
         if 'translations_cache' not in st.session_state:
             st.session_state.translations_cache = {}
@@ -122,16 +129,21 @@ class TranslationService:
             return text
         
         # Vérification du cache
-        cache_key = f"{target_language}_{text}"
+        cache_key: str = f"{target_language}_{text}"
         if cache_key in st.session_state.translations_cache:
             return st.session_state.translations_cache[cache_key]
         
         # Traduction
         try:
-            translated = GoogleTranslator(source='fr', target=target_language).translate(text)
+            translator = GoogleTranslator(source='fr', target=target_language)
+            translated: str = translator.translate(text)
             st.session_state.translations_cache[cache_key] = translated
             return translated
-        except Exception:
+        except ValueError as e:
+            st.debug(f"Langue de traduction invalide '{target_language}': {e}")
+            return text
+        except Exception as e:
+            st.debug(f"Erreur lors de la traduction de '{text}' vers '{target_language}': {e}")
             return text
     
     @classmethod
@@ -142,15 +154,14 @@ class TranslationService:
         Returns:
             Dictionnaire {code_langue: nom_affiché}
         """
-        return cls.LANGUAGES
+        return LANGUAGES
     
     @classmethod
-    def get_language_codes(cls) -> list:
+    def get_language_codes(cls) -> List[str]:
         """
         Retourne la liste des codes de langues disponibles.
         
         Returns:
             Liste des codes de langues
         """
-        return list(cls.LANGUAGES.keys())
-
+        return list(LANGUAGES.keys())

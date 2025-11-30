@@ -1,24 +1,39 @@
 """Module contenant la classe MovieRecommender pour la gestion du modèle et des recommandations."""
 
 import pickle
+from collections import defaultdict
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any, Union
+
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from collections import defaultdict
-from typing import Dict, Tuple, Optional, Any
 import streamlit as st
+
+from config import (
+    MODEL_PATH,
+    SCALER_USER_PATH,
+    SCALER_ITEM_PATH,
+    SCALER_TARGET_PATH,
+    MOVIE_DICT_PATH,
+    ITEM_VECS_PATH,
+    UNIQUE_GENRES_PATH,
+)
 
 
 class MovieRecommender:
     """Classe responsable du chargement du modèle et de la génération de recommandations."""
     
-    def __init__(self, model_path: str = "./templates/assets/film/best_model.keras",
-                 scaler_user_path: str = "./templates/assets/film/scalerUser.pkl",
-                 scaler_item_path: str = "./templates/assets/film/scalerItem.pkl",
-                 scaler_target_path: str = "./templates/assets/film/scalerTarget.pkl",
-                 movie_dict_path: str = "./templates/assets/film/movie_dict.pkl",
-                 item_vecs_path: str = "./templates/assets/film/item_vecs_finder.pkl",
-                 unique_genres_path: str = "./templates/assets/film/unique_genres.pkl"):
+    def __init__(
+        self,
+        model_path: Optional[Path] = None,
+        scaler_user_path: Optional[Path] = None,
+        scaler_item_path: Optional[Path] = None,
+        scaler_target_path: Optional[Path] = None,
+        movie_dict_path: Optional[Path] = None,
+        item_vecs_path: Optional[Path] = None,
+        unique_genres_path: Optional[Path] = None,
+    ) -> None:
         """
         Initialise le MovieRecommender avec les chemins vers les fichiers du modèle.
         
@@ -31,21 +46,21 @@ class MovieRecommender:
             item_vecs_path: Chemin vers les vecteurs d'items
             unique_genres_path: Chemin vers la liste des genres uniques
         """
-        self.model_path = model_path
-        self.scaler_user_path = scaler_user_path
-        self.scaler_item_path = scaler_item_path
-        self.scaler_target_path = scaler_target_path
-        self.movie_dict_path = movie_dict_path
-        self.item_vecs_path = item_vecs_path
-        self.unique_genres_path = unique_genres_path
+        self.model_path: Path = model_path or MODEL_PATH
+        self.scaler_user_path: Path = scaler_user_path or SCALER_USER_PATH
+        self.scaler_item_path: Path = scaler_item_path or SCALER_ITEM_PATH
+        self.scaler_target_path: Path = scaler_target_path or SCALER_TARGET_PATH
+        self.movie_dict_path: Path = movie_dict_path or MOVIE_DICT_PATH
+        self.item_vecs_path: Path = item_vecs_path or ITEM_VECS_PATH
+        self.unique_genres_path: Path = unique_genres_path or UNIQUE_GENRES_PATH
         
         self.model: Optional[tf.keras.Model] = None
-        self.scaler_user = None
-        self.scaler_item = None
-        self.scaler_target = None
+        self.scaler_user: Optional[Any] = None
+        self.scaler_item: Optional[Any] = None
+        self.scaler_target: Optional[Any] = None
         self.movie_dict: Optional[Dict[int, Dict[str, Any]]] = None
-        self.item_vecs_finder = None
-        self.unique_genres = None
+        self.item_vecs_finder: Optional[np.ndarray] = None
+        self.unique_genres: Optional[List[str]] = None
     
     @st.cache_resource
     def _load_model(self) -> Optional[tf.keras.Model]:
@@ -56,17 +71,20 @@ class MovieRecommender:
             Le modèle Keras chargé ou None en cas d'erreur
         """
         try:
-            def l2_norm(x):
+            def l2_norm(x: tf.Tensor) -> tf.Tensor:
+                """Normalisation L2."""
                 return tf.linalg.l2_normalize(x, axis=1)
 
-            def diff_abs(x):
+            def diff_abs(x: Tuple[tf.Tensor, tf.Tensor]) -> tf.Tensor:
+                """Différence absolue entre deux tenseurs."""
                 return tf.abs(x[0] - x[1])
 
-            def prod_mul(x):
+            def prod_mul(x: Tuple[tf.Tensor, tf.Tensor]) -> tf.Tensor:
+                """Produit élément par élément de deux tenseurs."""
                 return x[0] * x[1]
 
             return tf.keras.models.load_model(
-                self.model_path,
+                str(self.model_path),
                 custom_objects={
                     'l2_norm': l2_norm,
                     'diff_abs': diff_abs,
@@ -74,12 +92,27 @@ class MovieRecommender:
                 },
                 safe_mode=False
             )
+        except (OSError, IOError) as e:
+            st.error(f"Erreur lors du chargement du modèle (fichier non trouvé) : {e}")
+            return None
+        except (ValueError, AttributeError) as e:
+            st.error(f"Erreur lors du chargement du modèle (format invalide) : {e}")
+            return None
         except Exception as e:
-            st.error(f"Erreur lors du chargement du modèle : {e}")
+            st.error(f"Erreur inattendue lors du chargement du modèle : {e}")
             return None
     
     @st.cache_data
-    def _load_objects(self) -> Tuple[Any, Any, Any, Optional[Dict], Any, Any]:
+    def _load_objects(
+        self
+    ) -> Tuple[
+        Optional[Any],
+        Optional[Any],
+        Optional[Any],
+        Optional[Dict[int, Dict[str, Any]]],
+        Optional[np.ndarray],
+        Optional[List[str]],
+    ]:
         """
         Charge tous les objets nécessaires (scalers, dictionnaires, etc.).
         
@@ -101,7 +134,13 @@ class MovieRecommender:
                 unique_genres = pickle.load(f)
             return scaler_user, scaler_item, scaler_target, movie_dict, item_vecs_finder, unique_genres
         except FileNotFoundError as e:
-            st.error(f"Fichiers .pkl manquants : {e}")
+            st.error(f"Fichier .pkl manquant : {e}")
+            return (None,) * 6
+        except (OSError, IOError) as e:
+            st.error(f"Erreur lors de la lecture d'un fichier .pkl : {e}")
+            return (None,) * 6
+        except (pickle.UnpicklingError, EOFError) as e:
+            st.error(f"Erreur lors du désérialisation d'un fichier .pkl : {e}")
             return (None,) * 6
     
     def initialize(self) -> bool:
@@ -112,8 +151,14 @@ class MovieRecommender:
             True si l'initialisation a réussi, False sinon
         """
         self.model = self._load_model()
-        self.scaler_user, self.scaler_item, self.scaler_target, \
-        self.movie_dict, self.item_vecs_finder, self.unique_genres = self._load_objects()
+        (
+            self.scaler_user,
+            self.scaler_item,
+            self.scaler_target,
+            self.movie_dict,
+            self.item_vecs_finder,
+            self.unique_genres,
+        ) = self._load_objects()
         
         return self.is_ready()
     
@@ -131,7 +176,7 @@ class MovieRecommender:
             self.scaler_target is not None,
             self.movie_dict is not None,
             self.item_vecs_finder is not None,
-            self.unique_genres is not None
+            self.unique_genres is not None,
         ])
     
     def generate_recommendations(self, user_ratings: Dict[int, float]) -> pd.DataFrame:
@@ -151,52 +196,60 @@ class MovieRecommender:
         if not self.is_ready():
             return pd.DataFrame()
         
+        if not user_ratings:
+            return pd.DataFrame()
+        
         # Calcul des statistiques utilisateur
-        num_ratings = len(user_ratings)
-        avg_rating = np.mean(list(user_ratings.values()))
+        num_ratings: int = len(user_ratings)
+        avg_rating: float = float(np.mean(list(user_ratings.values())))
         
         # Calcul des préférences par genre
-        genre_ratings = defaultdict(list)
+        genre_ratings: Dict[str, List[float]] = defaultdict(list)
         for movie_id, rating in user_ratings.items():
-            genres_str = self.movie_dict[movie_id]['genres']
+            if movie_id not in self.movie_dict:
+                continue
+            genres_str: Union[str, float] = self.movie_dict[movie_id]['genres']
             if pd.notna(genres_str) and genres_str != "(no genres listed)":
-                for genre in genres_str.split('|'):
-                    genre_ratings[genre].append(rating)
+                for genre in str(genres_str).split('|'):
+                    genre_ratings[genre].append(float(rating))
         
         # Construction du vecteur utilisateur
-        user_prefs = {
-            f'pref_{g}': np.mean(genre_ratings.get(g, [avg_rating])) 
+        user_prefs: Dict[str, float] = {
+            f'pref_{g}': float(np.mean(genre_ratings.get(g, [avg_rating])))
             for g in self.unique_genres
         }
-        user_vec = np.array([[num_ratings, avg_rating, 0] + list(user_prefs.values())])
+        user_vec: np.ndarray = np.array([[num_ratings, avg_rating, 0] + list(user_prefs.values())])
         
         # Préparation des données pour la prédiction
-        num_items = len(self.item_vecs_finder)
-        user_vecs_repeated = np.tile(user_vec, (num_items, 1))
+        num_items: int = len(self.item_vecs_finder)
+        user_vecs_repeated: np.ndarray = np.tile(user_vec, (num_items, 1))
         
         # Normalisation
-        suser_vecs = self.scaler_user.transform(user_vecs_repeated)
-        sitem_vecs = self.scaler_item.transform(self.item_vecs_finder[:, 1:])
+        suser_vecs: np.ndarray = self.scaler_user.transform(user_vecs_repeated)
+        sitem_vecs: np.ndarray = self.scaler_item.transform(self.item_vecs_finder[:, 1:])
         
         # Prédiction
-        predictions = self.model.predict([suser_vecs, sitem_vecs], verbose=0)
-        predictions_rescaled = self.scaler_target.inverse_transform(predictions)
+        predictions: np.ndarray = self.model.predict([suser_vecs, sitem_vecs], verbose=0)
+        predictions_rescaled: np.ndarray = self.scaler_target.inverse_transform(predictions)
         
         # Construction du DataFrame de recommandations
-        recommendations = []
+        recommendations: List[Dict[str, Union[int, str, float]]] = []
         for i, item_id in enumerate(self.item_vecs_finder[:, 0]):
-            if int(item_id) not in user_ratings:
+            movie_id: int = int(item_id)
+            if movie_id not in user_ratings and movie_id in self.movie_dict:
                 recommendations.append({
-                    'Movie ID': int(item_id),
-                    'Titre': self.movie_dict[int(item_id)]['title'],
-                    'Genres': self.movie_dict[int(item_id)]['genres'],
-                    'Note Prédite': predictions_rescaled[i][0]
+                    'Movie ID': movie_id,
+                    'Titre': self.movie_dict[movie_id]['title'],
+                    'Genres': self.movie_dict[movie_id]['genres'],
+                    'Note Prédite': float(predictions_rescaled[i][0])
                 })
         
-        reco_df = pd.DataFrame(recommendations)
+        reco_df: pd.DataFrame = pd.DataFrame(recommendations)
+        if reco_df.empty:
+            return reco_df
         return reco_df.sort_values(by='Note Prédite', ascending=False)
     
-    def get_movie_list(self) -> list:
+    def get_movie_list(self) -> List[str]:
         """
         Retourne la liste triée de tous les titres de films disponibles.
         
@@ -237,4 +290,3 @@ class MovieRecommender:
         if not self.movie_dict or movie_id not in self.movie_dict:
             return None
         return self.movie_dict[movie_id].get('title')
-

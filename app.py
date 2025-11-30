@@ -1,15 +1,25 @@
 """Application Streamlit principale pour le système de recommandation de films."""
 
+from typing import List, Set, Dict
+
 import streamlit as st
 import pandas as pd
 
 from core.recommender import MovieRecommender
 from services.metadata import MetadataService, TranslationService
+from config import (
+    NO_POSTER_IMAGE_PATH,
+    ARCHITECTURE_IMAGE_PATH,
+    APP_TITLE,
+    APP_LAYOUT,
+    PORTFOLIO_URL,
+    DEFAULT_LANGUAGE,
+)
 
 
 # Initialisation des services
 @st.cache_resource
-def get_recommender():
+def get_recommender() -> MovieRecommender:
     """Initialise et retourne le MovieRecommender."""
     recommender = MovieRecommender()
     recommender.initialize()
@@ -17,26 +27,26 @@ def get_recommender():
 
 
 @st.cache_resource
-def get_metadata_service():
+def get_metadata_service() -> MetadataService:
     """Initialise et retourne le MetadataService."""
     return MetadataService()
 
 
-def get_translation_service():
+def get_translation_service() -> TranslationService:
     """Initialise et retourne le TranslationService."""
     return TranslationService()
 
 
 # Configuration de la langue
 if 'language' not in st.session_state:
-    st.session_state.language = 'fr'
+    st.session_state.language = DEFAULT_LANGUAGE
 
-translation_service = get_translation_service()
-lang_options = translation_service.get_language_options()
-lang_codes = translation_service.get_language_codes()
+translation_service: TranslationService = get_translation_service()
+lang_options: Dict[str, str] = translation_service.get_language_options()
+lang_codes: List[str] = translation_service.get_language_codes()
 
 # Sélecteur de langue
-lang = st.sidebar.selectbox(
+lang: str = st.sidebar.selectbox(
     "🌐 Language / Langue",
     options=lang_codes,
     format_func=lambda x: lang_options[x],
@@ -52,13 +62,13 @@ def _(text: str) -> str:
 
 
 # Initialisation des services
-recommender = get_recommender()
-metadata_service = get_metadata_service()
+recommender: MovieRecommender = get_recommender()
+metadata_service: MetadataService = get_metadata_service()
 
 # Bouton de redirection
 st.markdown(
     f"""
-    <a href="https://gabriel.mariebrisson.fr" target="_blank" style="text-decoration:none;">
+    <a href="{PORTFOLIO_URL}" target="_blank" style="text-decoration:none;">
     <div style="
     display: inline-block;
     background: linear-gradient(135deg, #6A11CB 0%, #2575FC 100%);
@@ -85,7 +95,7 @@ st.markdown(
 )
 
 # --- Interface Streamlit ---
-st.set_page_config(layout="wide", page_title=_("Ciné-Reco"))
+st.set_page_config(layout=APP_LAYOUT, page_title=_(APP_TITLE))
 st.title(_("🎬 Ciné-Reco : Votre Guide Cinéma Personnalisé"))
 
 if recommender.is_ready():
@@ -96,23 +106,25 @@ if recommender.is_ready():
         st.session_state.user_ratings = {}
     
     # Recherche HORS du formulaire
-    movie_list = recommender.get_movie_list()
-    search_term = st.sidebar.text_input(_("Rechercher un film à noter :"))
+    movie_list: List[str] = recommender.get_movie_list()
+    search_term: str = st.sidebar.text_input(_("Rechercher un film à noter :"))
     
     if search_term:
-        filtered_movie_list = [m for m in movie_list if search_term.lower() in m.lower()]
+        filtered_movie_list: List[str] = [
+            m for m in movie_list if search_term.lower() in m.lower()
+        ]
     else:
         filtered_movie_list = movie_list[:1000]
     
     with st.sidebar.form("rating_form"):
         if filtered_movie_list:
-            selected_movie_title = st.selectbox(_("Choisissez un film"), filtered_movie_list)
+            selected_movie_title: str = st.selectbox(_("Choisissez un film"), filtered_movie_list)
         else:
             st.warning(_("Aucun film trouvé pour cette recherche. Essaie avec un titre en anglais ou un film sorti avant 2024."))
             selected_movie_title = None
         
-        rating = st.slider(_("Votre note"), 1.0, 5.0, 3.0, 0.5)
-        submitted = st.form_submit_button(_("Ajouter la note"))
+        rating: float = st.slider(_("Votre note"), 1.0, 5.0, 3.0, 0.5)
+        submitted: bool = st.form_submit_button(_("Ajouter la note"))
         
         if submitted and selected_movie_title:
             movie_id = recommender.get_movie_id_by_title(selected_movie_title)
@@ -134,26 +146,31 @@ if recommender.is_ready():
     st.header(_("🌟 Vos Recommandations Personnalisées"))
     if len(st.session_state.user_ratings) >= 3:
         with st.spinner(_("Nous préparons votre sélection personnalisée...")):
-            recommendations_df = recommender.generate_recommendations(st.session_state.user_ratings)
+            recommendations_df: pd.DataFrame = recommender.generate_recommendations(
+                st.session_state.user_ratings
+            )
         
         # Filtrage par genre
-        all_genres = set()
+        all_genres: Set[str] = set()
         for genres_str in recommendations_df['Genres'].dropna():
             if genres_str and genres_str != "(no genres listed)":
                 for genre in str(genres_str).split('|'):
                     if genre.strip():
                         all_genres.add(genre.strip())
         
-        all_genres = sorted(list(all_genres))
-        selected_genres = st.multiselect(_("Filtrer par genre :"), all_genres)
+        sorted_genres: List[str] = sorted(list(all_genres))
+        selected_genres: List[str] = st.multiselect(_("Filtrer par genre :"), sorted_genres)
         
         if selected_genres:
-            def has_selected_genre(genres_str):
+            def has_selected_genre(genres_str: str) -> bool:
+                """Vérifie si un film contient au moins un des genres sélectionnés."""
                 if pd.isna(genres_str) or not genres_str:
                     return False
                 return any(g in str(genres_str) for g in selected_genres)
             
-            filtered_df = recommendations_df[recommendations_df['Genres'].apply(has_selected_genre)]
+            filtered_df: pd.DataFrame = recommendations_df[
+                recommendations_df['Genres'].apply(has_selected_genre)
+            ]
         else:
             filtered_df = recommendations_df
         
@@ -168,7 +185,7 @@ if recommender.is_ready():
                 if movie_data and movie_data.get("poster") and movie_data["poster"] != "N/A":
                     st.image(movie_data["poster"], caption=f"{row['Note Prédite']:.1f} ⭐")
                 else:
-                    st.image("./templates/assets/images/no-poster.jpg", caption=f"{row['Note Prédite']:.1f} ⭐")
+                    st.image(str(NO_POSTER_IMAGE_PATH), caption=f"{row['Note Prédite']:.1f} ⭐")
                 
                 with st.expander(f"_{row['Titre']}_"):
                     st.write(f"**{_('Genres')} :** {movie_data['genre'] if movie_data else row['Genres']}")
@@ -252,7 +269,7 @@ facilement convertible en note prédite sur l'échelle 0.5-5 étoiles.
 
 Malgré ces limitations, le modèle offre des recommandations fiables et pertinentes."""
     ))
-    st.image("./templates/assets/film/architecture_model.png", caption=_("Architecture du modèle neuronal"), use_container_width=True)
+    st.image(str(ARCHITECTURE_IMAGE_PATH), caption=_("Architecture du modèle neuronal"), use_container_width=True)
     
     # Section Résultats
     st.header(_("Performances du Modèle"))
@@ -312,4 +329,3 @@ st.markdown(_(
     Développé par [Gabriel Marie-Brisson](https://gabriel.mariebrisson.fr)
     """
 ))
-
