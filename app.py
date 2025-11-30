@@ -1,5 +1,6 @@
 """Application Streamlit principale pour le système de recommandation de films."""
 
+import asyncio
 from typing import List, Set, Dict
 
 import streamlit as st
@@ -176,11 +177,19 @@ if recommender.is_ready():
         
         st.subheader(_("Top") + f" {min(20, len(filtered_df))} " + _("des films pour vous :"))
         
+        # Récupérer les métadonnées de tous les films en parallèle
+        top_movies = filtered_df.head(20)
+        movie_titles = [row['Titre'] for _, row in top_movies.iterrows()]
+        
+        # Exécuter les appels asynchrones en parallèle
+        # Streamlit exécute chaque script dans un nouveau contexte, donc asyncio.run() fonctionne
+        movies_data_dict = asyncio.run(metadata_service.get_movies_data_batch(movie_titles))
+        
         cols = st.columns(5)
-        for i, (idx, row) in enumerate(filtered_df.head(20).iterrows()):
+        for i, (idx, row) in enumerate(top_movies.iterrows()):
             col = cols[i % 5]
             with col:
-                movie_data = metadata_service.get_movie_data(row['Titre'])
+                movie_data = movies_data_dict.get(row['Titre'])
                 
                 if movie_data and movie_data.get("poster") and movie_data["poster"] != "N/A":
                     st.image(movie_data["poster"], caption=f"{row['Note Prédite']:.1f} ⭐")
