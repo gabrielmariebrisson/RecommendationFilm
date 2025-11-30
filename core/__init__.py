@@ -7,6 +7,10 @@ from .monitoring import (
     generate_trace_id,
     get_logger,
 )
+from .model_registry import (
+    ModelVersionManager,
+    ModelMetadata,
+)
 
 __all__ = [
     'MovieRecommender',
@@ -14,5 +18,7 @@ __all__ = [
     'RecommendationMetrics',
     'generate_trace_id',
     'get_logger',
+    'ModelVersionManager',
+    'ModelMetadata',
 ]
 

@@ -22,9 +22,33 @@ from config import (
 # Initialisation des services
 @st.cache_resource
 def get_recommender() -> MovieRecommender:
-    """Initialise et retourne le MovieRecommender."""
-    recommender = MovieRecommender()
-    recommender.initialize()
+    """
+    Initialise et retourne le MovieRecommender.
+    
+    Tente de charger depuis le Model Registry si disponible,
+    sinon utilise les chemins par défaut.
+    """
+    from core.model_registry import ModelVersionManager
+    from config import MODEL_REGISTRY_PATH
+    
+    # Essayer de charger depuis le registre
+    registry = ModelVersionManager(registry_path=MODEL_REGISTRY_PATH)
+    latest_version = registry.get_latest_stable_version()
+    
+    if latest_version:
+        # Charger depuis le registre
+        recommender = MovieRecommender(
+            model_registry=registry,
+            model_version=latest_version,
+        )
+    else:
+        # Fallback vers les chemins par défaut
+        recommender = MovieRecommender()
+    
+    if not recommender.initialize():
+        st.error("Failed to initialize recommender. Check logs for details.")
+        return recommender
+    
     return recommender
 
 

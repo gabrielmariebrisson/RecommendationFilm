@@ -56,3 +56,6 @@ PORTFOLIO_URL = "https://gabriel.mariebrisson.fr"
 # --- Configuration du cache Streamlit ---
 CACHE_TTL_SECONDS = 3600  # 1 heure
 
+# --- Configuration du Model Registry ---
+MODEL_REGISTRY_PATH = BASE_DIR / "models"  # Dossier pour les versions de modèles
+

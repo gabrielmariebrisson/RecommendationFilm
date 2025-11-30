@@ -42,6 +42,8 @@ class MovieRecommender:
         item_vecs_path: Optional[Path] = None,
         unique_genres_path: Optional[Path] = None,
         logger: Optional[StructuredLogger] = None,
+        model_registry: Optional[ModelVersionManager] = None,
+        model_version: Optional[str] = None,
     ) -> None:
         """
         Initialise le MovieRecommender avec les chemins vers les fichiers du modèle.
@@ -55,14 +57,42 @@ class MovieRecommender:
             item_vecs_path: Chemin vers les vecteurs d'items
             unique_genres_path: Chemin vers la liste des genres uniques
             logger: Logger structuré (optionnel, crée un logger par défaut si None)
+            model_registry: ModelVersionManager pour charger depuis le registre (optionnel)
+            model_version: Version du modèle à charger depuis le registre (optionnel)
         """
-        self.model_path: Path = model_path or MODEL_PATH
-        self.scaler_user_path: Path = scaler_user_path or SCALER_USER_PATH
-        self.scaler_item_path: Path = scaler_item_path or SCALER_ITEM_PATH
-        self.scaler_target_path: Path = scaler_target_path or SCALER_TARGET_PATH
-        self.movie_dict_path: Path = movie_dict_path or MOVIE_DICT_PATH
-        self.item_vecs_path: Path = item_vecs_path or ITEM_VECS_PATH
-        self.unique_genres_path: Path = unique_genres_path or UNIQUE_GENRES_PATH
+        self.model_registry: Optional[ModelVersionManager] = model_registry
+        self.model_version: Optional[str] = model_version
+        
+        # Si un registre est fourni, charger les chemins depuis les métadonnées
+        if self.model_registry:
+            paths = self.model_registry.load_model_paths(version=model_version)
+            if paths:
+                self.model_path = paths['model_path']
+                self.scaler_user_path = paths.get('scaler_user_path') or SCALER_USER_PATH
+                self.scaler_item_path = paths.get('scaler_item_path') or SCALER_ITEM_PATH
+                self.scaler_target_path = paths.get('scaler_target_path') or SCALER_TARGET_PATH
+                self.movie_dict_path = paths.get('movie_dict_path') or MOVIE_DICT_PATH
+                self.item_vecs_path = paths.get('item_vecs_path') or ITEM_VECS_PATH
+                self.unique_genres_path = paths.get('unique_genres_path') or UNIQUE_GENRES_PATH
+            else:
+                # Fallback vers les chemins par défaut si le registre échoue
+                self.logger.warning("Failed to load paths from registry, using defaults")
+                self.model_path = model_path or MODEL_PATH
+                self.scaler_user_path = scaler_user_path or SCALER_USER_PATH
+                self.scaler_item_path = scaler_item_path or SCALER_ITEM_PATH
+                self.scaler_target_path = scaler_target_path or SCALER_TARGET_PATH
+                self.movie_dict_path = movie_dict_path or MOVIE_DICT_PATH
+                self.item_vecs_path = item_vecs_path or ITEM_VECS_PATH
+                self.unique_genres_path = unique_genres_path or UNIQUE_GENRES_PATH
+        else:
+            # Utiliser les chemins fournis ou par défaut
+            self.model_path: Path = model_path or MODEL_PATH
+            self.scaler_user_path: Path = scaler_user_path or SCALER_USER_PATH
+            self.scaler_item_path: Path = scaler_item_path or SCALER_ITEM_PATH
+            self.scaler_target_path: Path = scaler_target_path or SCALER_TARGET_PATH
+            self.movie_dict_path: Path = movie_dict_path or MOVIE_DICT_PATH
+            self.item_vecs_path: Path = item_vecs_path or ITEM_VECS_PATH
+            self.unique_genres_path: Path = unique_genres_path or UNIQUE_GENRES_PATH
         
         self.model: Optional[tf.keras.Model] = None
         self.scaler_user: Optional[Any] = None
@@ -77,6 +107,9 @@ class MovieRecommender:
         
         # Cache pour les embeddings utilisateur (amélioration performance)
         self._embedding_cache: Dict[str, np.ndarray] = {}
+        
+        # Métadonnées du modèle chargé
+        self.model_metadata: Optional[ModelMetadata] = None
     
     @st.cache_resource
     def _load_model(self) -> Optional[tf.keras.Model]:
@@ -207,6 +240,18 @@ class MovieRecommender:
         Returns:
             True si l'initialisation a réussi, False sinon
         """
+        # Charger les métadonnées si un registre est utilisé
+        if self.model_registry:
+            self.model_metadata = self.model_registry.load_metadata(version=self.model_version)
+            if self.model_metadata:
+                self.logger.info(
+                    f"Loading model version {self.model_metadata.version}",
+                    component="model_registry",
+                    version=self.model_metadata.version,
+                    training_date=self.model_metadata.training_date,
+                    rmse=self.model_metadata.rmse,
+                )
+        
         self.model = self._load_model()
         (
             self.scaler_user,
@@ -217,7 +262,20 @@ class MovieRecommender:
             self.unique_genres,
         ) = self._load_objects()
         
-        return self.is_ready()
+        if not self.is_ready():
+            return False
+        
+        # Effectuer un health check après le chargement
+        health_ok, health_error = self.health_check()
+        if not health_ok:
+            self.logger.error(
+                "Health check failed after initialization",
+                component="health_check",
+                error=health_error,
+            )
+            return False
+        
+        return True
     
     def is_ready(self) -> bool:
         """
@@ -530,3 +588,109 @@ class MovieRecommender:
         if not self.movie_dict or movie_id not in self.movie_dict:
             return None
         return self.movie_dict[movie_id].get('title')
+    
+    def health_check(self) -> Tuple[bool, Optional[str]]:
+        """
+        Effectue un health check du modèle en faisant une prédiction dummy.
+        
+        Cette méthode vérifie que le modèle est chargé et fonctionnel en effectuant
+        une prédiction sur un vecteur de zéros. C'est essentiel pour confirmer que
+        le modèle est "Inference Ready" avant de servir des requêtes réelles.
+        
+        Returns:
+            Tuple (is_healthy, error_message)
+            - is_healthy: True si le modèle répond correctement
+            - error_message: Message d'erreur si le health check échoue
+        """
+        if not self.is_ready():
+            return False, "Recommender not ready: model or data not loaded"
+        
+        try:
+            # Créer un vecteur utilisateur dummy (zéros)
+            # Shape doit correspondre à ce que le modèle attend
+            num_features = len(self.unique_genres) + 3  # num_ratings, avg_rating, placeholder + genres
+            dummy_user_vec = np.zeros((1, num_features), dtype=np.float32)
+            
+            # Répéter pour avoir la même shape que les items
+            num_items = min(10, len(self.item_vecs_finder))  # Tester avec 10 items seulement
+            dummy_user_vecs = np.broadcast_to(dummy_user_vec, (num_items, num_features))
+            dummy_item_vecs = self.item_vecs_finder[:num_items, 1:]
+            
+            # Normaliser avec les scalers
+            dummy_suser_vecs = self.scaler_user.transform(dummy_user_vecs)
+            dummy_sitem_vecs = self.scaler_item.transform(dummy_item_vecs)
+            
+            # Convertir en tensors TensorFlow
+            suser_tensor = tf.constant(dummy_suser_vecs, dtype=tf.float32)
+            sitem_tensor = tf.constant(dummy_sitem_vecs, dtype=tf.float32)
+            
+            # Faire une prédiction dummy
+            dummy_predictions = self.model.predict(
+                [suser_tensor.numpy(), sitem_tensor.numpy()],
+                verbose=0
+            )
+            
+            # Vérifier que les prédictions sont valides
+            if dummy_predictions is None or len(dummy_predictions) == 0:
+                return False, "Model returned empty predictions"
+            
+            # Vérifier que les prédictions sont dans une plage raisonnable
+            # (entre 0 et 5 pour des notes de films)
+            predictions_min = float(np.min(dummy_predictions))
+            predictions_max = float(np.max(dummy_predictions))
+            
+            # Les prédictions normalisées peuvent être entre 0 et 1, 
+            # on vérifie juste qu'elles ne sont pas NaN ou Inf
+            if not np.isfinite(dummy_predictions).all():
+                return False, f"Model predictions contain NaN or Inf values"
+            
+            self.logger.debug(
+                "Health check passed",
+                component="health_check",
+                num_test_items=num_items,
+                predictions_range=(predictions_min, predictions_max),
+            )
+            
+            return True, None
+            
+        except Exception as e:
+            error_msg = f"Health check failed: {type(e).__name__}: {str(e)}"
+            self.logger.error(
+                "Health check failed with exception",
+                component="health_check",
+                error=e,
+                error_type=type(e).__name__,
+            )
+            return False, error_msg
+    
+    def get_model_info(self) -> Dict[str, Any]:
+        """
+        Retourne les informations sur le modèle chargé.
+        
+        Returns:
+            Dictionnaire avec les informations du modèle
+        """
+        info = {
+            'is_ready': self.is_ready(),
+            'model_loaded': self.model is not None,
+            'model_path': str(self.model_path) if self.model_path else None,
+        }
+        
+        # Ajouter les métadonnées si disponibles
+        if self.model_metadata:
+            info['version'] = self.model_metadata.version
+            info['training_date'] = self.model_metadata.training_date
+            info['rmse'] = self.model_metadata.rmse
+            info['mse'] = self.model_metadata.mse
+            info['accuracy'] = self.model_metadata.accuracy
+            info['commit_hash'] = self.model_metadata.commit_hash
+            info['description'] = self.model_metadata.description
+        
+        # Health check status
+        health_ok, health_error = self.health_check()
+        info['health_check'] = {
+            'status': 'healthy' if health_ok else 'unhealthy',
+            'error': health_error,
+        }
+        
+        return info
