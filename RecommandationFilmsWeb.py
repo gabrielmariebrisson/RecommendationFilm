@@ -1,189 +1,100 @@
+"""Application Streamlit principale pour le système de recommandation de films."""
+
+import asyncio
+from typing import List, Set, Dict
+
 import streamlit as st
 import pandas as pd
-import numpy as np
-import tensorflow as tf
-import pickle
-import requests
-from collections import defaultdict
-from deep_translator import GoogleTranslator
-import os
-from dotenv import load_dotenv
+
+from core.recommender import MovieRecommender
+from core.monitoring import generate_trace_id
+from services.metadata import MetadataService, TranslationService
+from config import (
+    NO_POSTER_IMAGE_PATH,
+    ARCHITECTURE_IMAGE_PATH,
+    APP_TITLE,
+    APP_LAYOUT,
+    PORTFOLIO_URL,
+    DEFAULT_LANGUAGE,
+)
 
 
+# Initialisation des services
+@st.cache_resource
+def get_recommender() -> MovieRecommender:
+    """
+    Initialise et retourne le MovieRecommender.
+    
+    Tente de charger depuis le Model Registry si disponible,
+    sinon utilise les chemins par défaut.
+    """
+    from core.model_registry import ModelVersionManager
+    from config import MODEL_REGISTRY_PATH
+    
+    # Essayer de charger depuis le registre
+    registry = ModelVersionManager(registry_path=MODEL_REGISTRY_PATH)
+    latest_version = registry.get_latest_stable_version()
+    
+    if latest_version:
+        # Charger depuis le registre
+        recommender = MovieRecommender(
+            model_registry=registry,
+            model_version=latest_version,
+        )
+    else:
+        # Fallback vers les chemins par défaut
+        recommender = MovieRecommender()
+    
+    if not recommender.initialize():
+        st.error("Failed to initialize recommender. Check logs for details.")
+        return recommender
+    
+    return recommender
 
-load_dotenv()
-API_KEY_FILM = os.getenv('API_KEY_FILM')
-# --- Configuration de la traduction automatique ---
-LANGUAGES = {
-    "fr": "🇫🇷 Français",
-    "en": "🇬🇧 English",
-    "es": "🇪🇸 Español",
-    "de": "🇩🇪 Deutsch",
-    "it": "🇮🇹 Italiano",
-    "pt": "🇵🇹 Português",
-    "ja": "🇯🇵 日本語",
-    "zh-CN": "🇨🇳 中文",
-    "ar": "🇸🇦 العربية",
-    "ru": "🇷🇺 Русский"
-}
 
-# Initialisation de la langue
+@st.cache_resource
+def get_metadata_service() -> MetadataService:
+    """Initialise et retourne le MetadataService."""
+    return MetadataService()
+
+
+def get_translation_service() -> TranslationService:
+    """Initialise et retourne le TranslationService."""
+    return TranslationService()
+
+
+# Configuration de la langue
 if 'language' not in st.session_state:
-    st.session_state.language = 'fr'
+    st.session_state.language = DEFAULT_LANGUAGE
+
+translation_service: TranslationService = get_translation_service()
+lang_options: Dict[str, str] = translation_service.get_language_options()
+lang_codes: List[str] = translation_service.get_language_codes()
 
 # Sélecteur de langue
-lang = st.sidebar.selectbox(
-    "🌐 Language / Langue", 
-    options=list(LANGUAGES.keys()),
-    format_func=lambda x: LANGUAGES[x],
-    index=list(LANGUAGES.keys()).index(st.session_state.language)
+lang: str = st.sidebar.selectbox(
+    "🌐 Language / Langue",
+    options=lang_codes,
+    format_func=lambda x: lang_options[x],
+    index=lang_codes.index(st.session_state.language) if st.session_state.language in lang_codes else 0
 )
 
 st.session_state.language = lang
 
-# Cache pour les traductions (évite de retranduire à chaque fois)
-if 'translations_cache' not in st.session_state:
-    st.session_state.translations_cache = {}
 
-def _(text):
-    """Fonction de traduction automatique avec cache"""
-    if lang == 'fr':
-        return text
-    
-    # Vérifier le cache
-    cache_key = f"{lang}_{text}"
-    if cache_key in st.session_state.translations_cache:
-        return st.session_state.translations_cache[cache_key]
-    
-    # Traduire
-    try:
-        translated = GoogleTranslator(source='fr', target=lang).translate(text)
-        st.session_state.translations_cache[cache_key] = translated
-        return translated
-    except:
-        return text
+def _(text: str) -> str:
+    """Fonction de traduction avec cache."""
+    return translation_service.translate(text, lang)
 
-# --- Fonctions de l'API OMDb ---
-@st.cache_data(ttl=3600)
-def get_movie_data(title):
-    """Récupère les infos du film depuis OMDb"""
-    year = None
-    clean_title = title
-    if title[-1] == ")" and "(" in title:
-        try:
-            year = title.split("(")[-1][:-1]
-            clean_title = title.rsplit("(", 1)[0].strip()
-        except:
-            pass
 
-    url = f"http://www.omdbapi.com/?t={clean_title}&apikey={API_KEY_FILM}"
-    if year:
-        url += f"&y={year}"
-
-    try:
-        response = requests.get(url).json()
-        if response.get("Response") == "True":
-            return {
-                "title": response["Title"],
-                "year": response["Year"],
-                "genre": response.get("Genre", "N/A"),
-                "director": response.get("Director", "N/A"),
-                "actors": response.get("Actors", "N/A"),
-                "plot": response.get("Plot", "N/A"),
-                "rating": response.get("imdbRating", "N/A"),
-                "votes": response.get("imdbVotes", "0"),
-                "poster": response.get("Poster", None),
-            }
-    except requests.RequestException:
-        return None
-    return None
-
-# --- Fonctions de chargement ---
-@st.cache_resource
-def load_model():
-    try:
-        def l2_norm(x):
-            return tf.linalg.l2_normalize(x, axis=1)
-
-        def diff_abs(x):
-            return tf.abs(x[0] - x[1])
-
-        def prod_mul(x):
-            return x[0] * x[1]
-
-        return tf.keras.models.load_model(
-            "./templates/assets/film/best_model.keras",
-            custom_objects={
-                'l2_norm': l2_norm,
-                'diff_abs': diff_abs,
-                'prod_mul': prod_mul
-            },
-            safe_mode=False
-        )
-    except Exception as e:
-        st.error(f"Erreur lors du chargement du modèle : {e}")
-        return None
-
-@st.cache_data
-def load_objects():
-    try:
-        with open('./templates/assets/film/scalerUser.pkl', 'rb') as f: scalerUser = pickle.load(f)
-        with open('./templates/assets/film/scalerItem.pkl', 'rb') as f: scalerItem = pickle.load(f)
-        with open('./templates/assets/film/scalerTarget.pkl', 'rb') as f: scalerTarget = pickle.load(f)
-        with open('./templates/assets/film/movie_dict.pkl', 'rb') as f: movie_dict = pickle.load(f)
-        with open('./templates/assets/film/item_vecs_finder.pkl', 'rb') as f: item_vecs_finder = pickle.load(f)
-        with open('./templates/assets/film/unique_genres.pkl', 'rb') as f: unique_genres = pickle.load(f)
-        return scalerUser, scalerItem, scalerTarget, movie_dict, item_vecs_finder, unique_genres
-    except FileNotFoundError:
-        st.error(_("Fichiers .pkl manquants. Assurez-vous d'avoir exécuté le script de sauvegarde."))
-        return (None,) * 6
-
-# --- Fonction de recommandation ---
-def generate_recommendations(model, user_ratings, scalers, data):
-    scalerUser, scalerItem, scalerTarget = scalers
-    movie_dict, item_vecs, unique_genres = data
-
-    if not all([model, scalerUser, scalerItem, scalerTarget, movie_dict, item_vecs is not None, unique_genres]):
-        return pd.DataFrame()
-
-    num_ratings = len(user_ratings)
-    avg_rating = np.mean(list(user_ratings.values()))
-    genre_ratings = defaultdict(list)
-    for movie_id, rating in user_ratings.items():
-        genres_str = movie_dict[movie_id]['genres']
-        if pd.notna(genres_str) and genres_str != "(no genres listed)":
-            for genre in genres_str.split('|'):
-                genre_ratings[genre].append(rating)
-
-    user_prefs = {f'pref_{g}': np.mean(genre_ratings.get(g, [avg_rating])) for g in unique_genres}
-    user_vec = np.array([[num_ratings, avg_rating, 0] + list(user_prefs.values())])
-    
-    num_items = len(item_vecs)
-    user_vecs_repeated = np.tile(user_vec, (num_items, 1))
-
-    suser_vecs = scalerUser.transform(user_vecs_repeated)
-    sitem_vecs = scalerItem.transform(item_vecs[:, 1:])
-
-    predictions = model.predict([suser_vecs, sitem_vecs])
-    predictions_rescaled = scalerTarget.inverse_transform(predictions)
-
-    recommendations = []
-    for i, item_id in enumerate(item_vecs[:, 0]):
-        if int(item_id) not in user_ratings:
-            recommendations.append({
-                'Movie ID': int(item_id),
-                'Titre': movie_dict[int(item_id)]['title'],
-                'Genres': movie_dict[int(item_id)]['genres'],
-                'Note Prédite': predictions_rescaled[i][0]
-            })
-
-    reco_df = pd.DataFrame(recommendations)
-    return reco_df.sort_values(by='Note Prédite', ascending=False)
+# Initialisation des services
+recommender: MovieRecommender = get_recommender()
+metadata_service: MetadataService = get_metadata_service()
 
 # Bouton de redirection
 st.markdown(
     f"""
-    <a href="https://gabriel.mariebrisson.fr" target="_blank" style="text-decoration:none;">
+    <a href="{PORTFOLIO_URL}" target="_blank" style="text-decoration:none;">
     <div style="
     display: inline-block;
     background: linear-gradient(135deg, #6A11CB 0%, #2575FC 100%);
@@ -210,95 +121,118 @@ st.markdown(
 )
 
 # --- Interface Streamlit ---
-st.set_page_config(layout="wide", page_title=_("Ciné-Reco"))
+st.set_page_config(layout=APP_LAYOUT, page_title=_(APP_TITLE))
 st.title(_("🎬 Ciné-Reco : Votre Guide Cinéma Personnalisé"))
 
-model = load_model()
-scalerUser, scalerItem, scalerTarget, movie_dict, item_vecs_finder, unique_genres = load_objects()
-
-if model and movie_dict:
+if recommender.is_ready():
     # --- Barre latérale pour la notation ---
     st.sidebar.header(_("🔍 Notez des films"))
     
     if 'user_ratings' not in st.session_state:
         st.session_state.user_ratings = {}
-
+    
     # Recherche HORS du formulaire
-    movie_list = sorted([info['title'] for info in movie_dict.values()])
-    search_term = st.sidebar.text_input(_("Rechercher un film à noter :"))
+    movie_list: List[str] = recommender.get_movie_list()
+    search_term: str = st.sidebar.text_input(_("Rechercher un film à noter :"))
     
     if search_term:
-        filtered_movie_list = [m for m in movie_list if search_term.lower() in m.lower()]
+        filtered_movie_list: List[str] = [
+            m for m in movie_list if search_term.lower() in m.lower()
+        ]
     else:
         filtered_movie_list = movie_list[:1000]
-
+    
     with st.sidebar.form("rating_form"):
         if filtered_movie_list:
-            selected_movie_title = st.selectbox(_("Choisissez un film"), filtered_movie_list)
+            selected_movie_title: str = st.selectbox(_("Choisissez un film"), filtered_movie_list)
         else:
             st.warning(_("Aucun film trouvé pour cette recherche. Essaie avec un titre en anglais ou un film sorti avant 2024."))
             selected_movie_title = None
-            
-        rating = st.slider(_("Votre note"), 1.0, 5.0, 3.0, 0.5)
-        submitted = st.form_submit_button(_("Ajouter la note"))
-
+        
+        rating: float = st.slider(_("Votre note"), 1.0, 5.0, 3.0, 0.5)
+        submitted: bool = st.form_submit_button(_("Ajouter la note"))
+        
         if submitted and selected_movie_title:
-            movie_id = next((mid for mid, info in movie_dict.items() if info['title'] == selected_movie_title), None)
+            movie_id = recommender.get_movie_id_by_title(selected_movie_title)
             if movie_id:
                 st.session_state.user_ratings[movie_id] = rating
                 st.success(_("Note ajoutée pour :") + f" {selected_movie_title}")
-
+    
     if st.session_state.user_ratings:
         st.sidebar.subheader(_("Vos notes :"))
         for movie_id, rating in st.session_state.user_ratings.items():
-            st.sidebar.write(f"- {movie_dict[movie_id]['title']}: **{rating} / 5.0**")
+            movie_title = recommender.get_movie_title_by_id(movie_id)
+            if movie_title:
+                st.sidebar.write(f"- {movie_title}: **{rating} / 5.0**")
         if st.sidebar.button(_("🗑️ Vider les notes")):
             st.session_state.user_ratings = {}
             st.rerun()
-
+    
     # --- Affichage principal des recommandations ---
     st.header(_("🌟 Vos Recommandations Personnalisées"))
     if len(st.session_state.user_ratings) >= 3:
         with st.spinner(_("Nous préparons votre sélection personnalisée...")):
-            recommendations_df = generate_recommendations(
-                model, 
-                st.session_state.user_ratings,
-                (scalerUser, scalerItem, scalerTarget),
-                (movie_dict, item_vecs_finder, unique_genres)
-            )
+            try:
+                # Générer un trace_id pour cette requête
+                trace_id = generate_trace_id()
+                
+                recommendations_df: pd.DataFrame = recommender.generate_recommendations(
+                    st.session_state.user_ratings,
+                    trace_id=trace_id,
+                )
+            except RuntimeError as e:
+                # Erreur attendue (modèle non prêt, etc.) - déjà loggée
+                st.error(_("Erreur lors de la génération des recommandations. Veuillez réessayer."))
+                recommendations_df = pd.DataFrame()
+            except Exception as e:
+                # Erreur inattendue - déjà loggée avec stacktrace
+                st.error(_("Une erreur inattendue s'est produite. Les logs ont été enregistrés."))
+                recommendations_df = pd.DataFrame()
         
-        all_genres = set()
+        # Filtrage par genre
+        all_genres: Set[str] = set()
         for genres_str in recommendations_df['Genres'].dropna():
             if genres_str and genres_str != "(no genres listed)":
                 for genre in str(genres_str).split('|'):
                     if genre.strip():
                         all_genres.add(genre.strip())
         
-        all_genres = sorted(list(all_genres))
-        selected_genres = st.multiselect(_("Filtrer par genre :"), all_genres)
+        sorted_genres: List[str] = sorted(list(all_genres))
+        selected_genres: List[str] = st.multiselect(_("Filtrer par genre :"), sorted_genres)
         
         if selected_genres:
-            def has_selected_genre(genres_str):
+            def has_selected_genre(genres_str: str) -> bool:
+                """Vérifie si un film contient au moins un des genres sélectionnés."""
                 if pd.isna(genres_str) or not genres_str:
                     return False
                 return any(g in str(genres_str) for g in selected_genres)
             
-            filtered_df = recommendations_df[recommendations_df['Genres'].apply(has_selected_genre)]
+            filtered_df: pd.DataFrame = recommendations_df[
+                recommendations_df['Genres'].apply(has_selected_genre)
+            ]
         else:
             filtered_df = recommendations_df
-
+        
         st.subheader(_("Top") + f" {min(20, len(filtered_df))} " + _("des films pour vous :"))
         
+        # Récupérer les métadonnées de tous les films en parallèle
+        top_movies = filtered_df.head(20)
+        movie_titles = [row['Titre'] for _, row in top_movies.iterrows()]
+        
+        # Exécuter les appels asynchrones en parallèle
+        # Streamlit exécute chaque script dans un nouveau contexte, donc asyncio.run() fonctionne
+        movies_data_dict = asyncio.run(metadata_service.get_movies_data_batch(movie_titles))
+        
         cols = st.columns(5)
-        for i, (idx, row) in enumerate(filtered_df.head(20).iterrows()):
+        for i, (idx, row) in enumerate(top_movies.iterrows()):
             col = cols[i % 5]
             with col:
-                movie_data = get_movie_data(row['Titre'])
+                movie_data = movies_data_dict.get(row['Titre'])
                 
-                if movie_data and movie_data["poster"] and movie_data["poster"] != "N/A":
+                if movie_data and movie_data.get("poster") and movie_data["poster"] != "N/A":
                     st.image(movie_data["poster"], caption=f"{row['Note Prédite']:.1f} ⭐")
                 else:
-                    st.image("./templates/assets/images/no-poster.jpg", caption=f"{row['Note Prédite']:.1f} ⭐")
+                    st.image(str(NO_POSTER_IMAGE_PATH), caption=f"{row['Note Prédite']:.1f} ⭐")
                 
                 with st.expander(f"_{row['Titre']}_"):
                     st.write(f"**{_('Genres')} :** {movie_data['genre'] if movie_data else row['Genres']}")
@@ -308,13 +242,13 @@ if model and movie_dict:
                         st.write(f"**{_('Résumé')} :** {movie_data['plot']}")
                         st.write(f"**{_('Note IMDb')} :** {movie_data['rating']} ⭐")
                         st.write(f"**{_('Année')} :** {movie_data['year']}")
-
+    
     else:
         st.info(_("""👋 Bienvenue !
 Veuillez noter au moins 3 films dans la barre latérale pour débloquer vos recommandations.
-Si on vous propose un film que vous avez déjà vu, il suffit de le noter pour qu’il ne vous soit plus proposé.
+Si on vous propose un film que vous avez déjà vu, il suffit de le noter pour qu'il ne vous soit plus proposé.
 Si on vous propose de mauvais films, il suffit de leur mettre une mauvaise note."""))
-
+    
     # Section Présentation
     st.header(_("Présentation"))
     st.markdown(_(
@@ -339,7 +273,7 @@ Ce système s'appuie sur le jeu de données MovieLens, qui contient :
 - Données à jour jusqu'au 1er mai 2024
 - Multiples genres cinématographiques pour affiner les recommandations"""
     ))
-
+    
     # Section Architecture du Modèle
     st.header(_("Architecture du Modèle"))
     st.markdown(_(
@@ -382,8 +316,8 @@ facilement convertible en note prédite sur l'échelle 0.5-5 étoiles.
 
 Malgré ces limitations, le modèle offre des recommandations fiables et pertinentes."""
     ))
-    st.image("./templates/assets/film/architecture_model.png", caption=_("Architecture du modèle neuronal"), use_container_width=True)
-
+    st.image(str(ARCHITECTURE_IMAGE_PATH), caption=_("Architecture du modèle neuronal"), use_container_width=True)
+    
     # Section Résultats
     st.header(_("Performances du Modèle"))
     st.markdown(_(
@@ -403,7 +337,7 @@ représente une précision acceptable dans la prédiction des préférences cin�
 À titre de comparaison, les systèmes de recommandation professionnels atteignent généralement des RMSE 
 entre 0.25 et 0.40 sur MovieLens, positionnant notre modèle dans une fourchette compétitive."""
     ))
-
+    
     # Section Coût et Maintenance
     st.header(_("Développement et Déploiement"))
     st.markdown(_(
@@ -431,8 +365,6 @@ entre 0.25 et 0.40 sur MovieLens, positionnant notre modèle dans une fourchette
 - A/B testing pour optimiser les hyperparamètres en production
 - Explainability : visualisation des facteurs influençant chaque recommandation"""
     ))
-
-
 
 else:
     st.error(_("L'application n'a pas pu démarrer. Vérifiez les fichiers du modèle et des données."))
