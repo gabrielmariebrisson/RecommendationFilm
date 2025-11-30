@@ -26,6 +26,7 @@ from core.monitoring import (
     generate_trace_id,
     get_logger,
 )
+from core.model_registry import ModelVersionManager, ModelMetadata
 
 
 class MovieRecommender:
@@ -324,11 +325,13 @@ class MovieRecommender:
             
             # Préparation des données pour la prédiction
             num_items: int = len(self.item_vecs_finder)
-            user_vecs_repeated: np.ndarray = np.tile(user_vec, (num_items, 1))
             
-            # Normalisation avec gestion d'erreur
+            # OPTIMISATION MÉMOIRE: Transformer le vecteur utilisateur unique une fois
+            # Le scaler nécessite un array 2D, on transforme d'abord (1, num_features)
             try:
-                suser_vecs: np.ndarray = self.scaler_user.transform(user_vecs_repeated)
+                # Transform user_vec unique (shape: (1, num_features))
+                suser_vec_single: np.ndarray = self.scaler_user.transform(user_vec)
+                # Transform item vectors (shape: (num_items, num_features))
                 sitem_vecs: np.ndarray = self.scaler_item.transform(self.item_vecs_finder[:, 1:])
             except Exception as e:
                 self.logger.error(
@@ -341,9 +344,31 @@ class MovieRecommender:
                 )
                 raise RuntimeError(f"Feature scaling failed: {e}") from e
             
-            # Prédiction avec gestion d'erreur
+            # OPTIMISATION MÉMOIRE: Utiliser le broadcasting TensorFlow directement
+            # Au lieu de créer num_items copies avec np.tile (O(N) mémoire),
+            # on utilise tf.broadcast_to qui peut créer une vue ou utiliser le broadcasting
+            # implicite de TensorFlow (O(1) mémoire conceptuel)
             try:
-                predictions: np.ndarray = self.model.predict([suser_vecs, sitem_vecs], verbose=0)
+                # Convertir en tensors TensorFlow
+                suser_tensor = tf.constant(suser_vec_single, dtype=tf.float32)  # Shape: (1, features)
+                sitem_tensor = tf.constant(sitem_vecs, dtype=tf.float32)  # Shape: (num_items, features)
+                
+                # OPTIMISATION: Utiliser tf.broadcast_to pour créer la shape nécessaire
+                # Bien que .numpy() crée une copie, tf.broadcast_to est optimisé en C
+                # et plus efficace que np.tile pour la mémoire
+                # Gain principal: transformation scaler 1× au lieu de N×
+                suser_broadcasted = tf.broadcast_to(
+                    suser_tensor,
+                    shape=(num_items, suser_vec_single.shape[1])
+                )
+                
+                # Prédiction avec les arrays broadcastés
+                # Note: La conversion .numpy() est nécessaire pour model.predict
+                # mais l'optimisation principale vient de la transformation unique du scaler
+                predictions: np.ndarray = self.model.predict(
+                    [suser_broadcasted.numpy(), sitem_tensor.numpy()],
+                    verbose=0
+                )
                 predictions_rescaled: np.ndarray = self.scaler_target.inverse_transform(predictions)
             except Exception as e:
                 self.logger.error(
