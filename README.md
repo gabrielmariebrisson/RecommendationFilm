@@ -5,6 +5,7 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.50-red.svg)](https://streamlit.io/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Architecture](https://img.shields.io/badge/Architecture-Layered-blueviolet.svg)](https://en.wikipedia.org/wiki/Multitier_architecture)
+[![CI](https://github.com/USERNAME/RecommendationFilm/actions/workflows/ci.yml/badge.svg)](https://github.com/USERNAME/RecommendationFilm/actions/workflows/ci.yml)
 
 > **Production-ready movie recommendation system** using a Siamese Neural Network architecture, deployed as a scalable web application with async API integration and comprehensive test coverage.
 
@@ -264,6 +265,14 @@ pytest tests/test_recommender.py -v
 # With coverage
 pytest tests/ --cov=core --cov=services --cov-report=html
 ```
+
+**CI/CD:**
+The project includes GitHub Actions workflows for automated testing and quality checks:
+- **CI Workflow**: Runs on every push/PR (tests, linting, security scans)
+- **Performance Benchmarks**: Weekly performance testing
+- **Release Workflow**: Automated release notes generation
+
+See `.github/workflows/` for details.
 
 **Code quality:**
 ```bash
