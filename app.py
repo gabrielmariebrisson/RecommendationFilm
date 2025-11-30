@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 
 from core.recommender import MovieRecommender
+from core.monitoring import generate_trace_id
 from services.metadata import MetadataService, TranslationService
 from config import (
     NO_POSTER_IMAGE_PATH,
@@ -147,9 +148,22 @@ if recommender.is_ready():
     st.header(_("🌟 Vos Recommandations Personnalisées"))
     if len(st.session_state.user_ratings) >= 3:
         with st.spinner(_("Nous préparons votre sélection personnalisée...")):
-            recommendations_df: pd.DataFrame = recommender.generate_recommendations(
-                st.session_state.user_ratings
-            )
+            try:
+                # Générer un trace_id pour cette requête
+                trace_id = generate_trace_id()
+                
+                recommendations_df: pd.DataFrame = recommender.generate_recommendations(
+                    st.session_state.user_ratings,
+                    trace_id=trace_id,
+                )
+            except RuntimeError as e:
+                # Erreur attendue (modèle non prêt, etc.) - déjà loggée
+                st.error(_("Erreur lors de la génération des recommandations. Veuillez réessayer."))
+                recommendations_df = pd.DataFrame()
+            except Exception as e:
+                # Erreur inattendue - déjà loggée avec stacktrace
+                st.error(_("Une erreur inattendue s'est produite. Les logs ont été enregistrés."))
+                recommendations_df = pd.DataFrame()
         
         # Filtrage par genre
         all_genres: Set[str] = set()

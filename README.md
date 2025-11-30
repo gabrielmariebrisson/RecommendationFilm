@@ -437,13 +437,6 @@ pytest tests/test_metadata.py -v
 - **Performance Tracking**: Inference time can be measured
 - **User Analytics**: Rating patterns can be analyzed
 
-### Future Enhancements
-
-- [ ] Real-time model updates (online learning)
-- [ ] A/B testing framework for model comparison
-- [ ] Explainability features (why this recommendation?)
-- [ ] Multi-armed bandit for exploration/exploitation
-- [ ] Graph Neural Networks for social recommendations
 
 ## 📝 License
 
@@ -454,7 +447,6 @@ MIT License - see LICENSE file for details
 **Gabriel Marie-Brisson**
 
 - Portfolio: [gabriel.mariebrisson.fr](https://gabriel.mariebrisson.fr)
-- GitHub: [@yourusername](https://github.com/yourusername)
 
 ---
 
