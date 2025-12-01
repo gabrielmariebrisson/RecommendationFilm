@@ -414,10 +414,10 @@ See `.github/workflows/` for details.
 **Code quality:**
 ```bash
 # Type checking (if mypy is installed)
-mypy core/ services/ app.py
+mypy src/ RecommandationFilmsWeb.py
 
 # Linting
-flake8 core/ services/ app.py
+flake8 src/ RecommandationFilmsWeb.py
 ```
 
 ## 📁 Project Structure
@@ -426,57 +426,59 @@ The project follows a **strict layered architecture** pattern, ensuring separati
 
 ```
 RecommendationFilm/
-├── app.py                 # Presentation layer (Streamlit UI)
-├── config.py             # Centralized configuration
-├── requirements.txt      # Python dependencies
+├── RecommandationFilmsWeb.py  # Presentation layer (Streamlit UI)
+├── requirements.txt           # Python dependencies
 │
-├── core/                 # Business logic layer
+├── src/                      # Source code package
 │   ├── __init__.py
-│   ├── recommender.py   # MovieRecommender class
-│   │                    # - Model loading & inference
-│   │                    # - Recommendation generation
-│   │                    # - User preference computation
-│   │                    # - Health checks
-│   ├── model_registry.py # Model Registry & versioning
-│   │                     # - ModelVersionManager
-│   │                     # - Metadata validation
-│   │                     # - Version management
-│   └── monitoring.py    # Observability layer
-│                        # - StructuredLogger (JSON logs)
-│                        # - RecommendationMetrics
-│                        # - Trace ID generation
+│   ├── config.py            # Centralized configuration
+│   │
+│   ├── core/                 # Business logic layer
+│   │   ├── __init__.py
+│   │   ├── recommender.py   # MovieRecommender class
+│   │   │                    # - Model loading & inference
+│   │   │                    # - Recommendation generation
+│   │   │                    # - User preference computation
+│   │   │                    # - Health checks
+│   │   ├── model_registry.py # Model Registry & versioning
+│   │   │                     # - ModelVersionManager
+│   │   │                     # - Metadata validation
+│   │   │                     # - Version management
+│   │   └── monitoring.py    # Observability layer
+│   │                        # - StructuredLogger (JSON logs)
+│   │                        # - RecommendationMetrics
+│   │                        # - Trace ID generation
+│   │
+│   ├── services/             # Service layer
+│   │   ├── __init__.py
+│   │   └── metadata.py      # External API services
+│   │                        # - MetadataService (OMDb API)
+│   │                        # - TranslationService (i18n)
+│   │                        # - Async batch operations
+│   │
+│   ├── scripts/              # Utility scripts
+│   │   ├── register_model.py # Model registration CLI
+│   │   └── README.md        # Scripts documentation
+│   │
+│   └── models/               # Model Registry storage
 │
-├── services/             # Service layer
-│   ├── __init__.py
-│   └── metadata.py      # External API services
-│                        # - MetadataService (OMDb API)
-│                        # - TranslationService (i18n)
-│                        # - Async batch operations
-│
-├── tests/                # Test suite
-│   ├── conftest.py      # Pytest configuration & mocks
-│   ├── test_metadata.py # API service tests
-│   ├── test_recommender.py # Core logic tests
-│   └── performance/     # Performance benchmarks
+├── tests/                    # Test suite
+│   ├── conftest.py          # Pytest configuration & mocks
+│   ├── test_metadata.py     # API service tests
+│   ├── test_recommender.py  # Core logic tests
+│   └── performance/         # Performance benchmarks
 │       ├── benchmark_scale.py # Scalability tests
 │       └── generate_report.py # Benchmark reports
 │
-├── scripts/              # Utility scripts
-│   ├── register_model.py # Model registration CLI
-│   └── README.md        # Scripts documentation
-│
-├── docs/                 # Documentation
-│   └── adr/             # Architecture Decision Records
-│
-└── templates/            # Static assets
+└── templates/                # Static assets
     └── assets/
-        ├── film/        # Model files & scalers
-        └── images/     # UI assets
+        ├── film/            # Model files & scalers
+        └── images/          # UI assets
 ```
 
 ### Layer Responsibilities
 
-#### **Core Layer** (`core/`)
+#### **Core Layer** (`src/core/`)
 - **Purpose**: Business logic and domain models
 - **Responsibilities**:
   - Model inference and prediction
@@ -493,7 +495,7 @@ RecommendationFilm/
   - `model_registry.py`: Model versioning and metadata management
   - `monitoring.py`: Structured logging and metrics tracking
 
-#### **Service Layer** (`services/`)
+#### **Service Layer** (`src/services/`)
 - **Purpose**: External integrations and cross-cutting concerns
 - **Responsibilities**:
   - API communication (OMDb, translation services)
@@ -503,13 +505,20 @@ RecommendationFilm/
 - **Dependencies**: aiohttp, requests, deep-translator
 - **No dependencies on**: Core business logic
 
-#### **Presentation Layer** (`app.py`)
+#### **Presentation Layer** (`RecommandationFilmsWeb.py`)
 - **Purpose**: User interface and interaction
 - **Responsibilities**:
   - Streamlit UI components
   - User input handling
   - Result visualization
   - State management
+
+#### **Streamlit Helpers** (`src/streamlit_helpers.py`)
+- **Purpose**: Initialization and helper functions for Streamlit
+- **Responsibilities**:
+  - Service initialization (recommender, metadata, translation)
+  - Streamlit cache management
+  - UI utility functions
 - **Dependencies**: Streamlit, Core layer, Service layer
 - **Thin layer**: Delegates all business logic to Core
 
@@ -673,8 +682,8 @@ python scripts/register_model.py v1 \
 The system includes a Model Registry for versioned model management:
 
 ```python
-from core.model_registry import ModelVersionManager
-from config import MODEL_REGISTRY_PATH
+from src.core.model_registry import ModelVersionManager
+from src.config import MODEL_REGISTRY_PATH
 
 # Initialize registry
 registry = ModelVersionManager(registry_path=MODEL_REGISTRY_PATH)
@@ -706,7 +715,7 @@ if not is_healthy:
 Structured logging with trace IDs:
 
 ```python
-from core.monitoring import get_logger
+from src.core.monitoring import get_logger
 
 logger = get_logger()
 logger.info(

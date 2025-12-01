@@ -33,7 +33,7 @@ class ModelMetadata:
     def to_dict(self) -> Dict[str, Any]:
         """Convertit les métadonnées en dictionnaire."""
         result = asdict(self)
-        # Convertir les Path en strings pour JSON
+        # Convertir les Path en strings pour JSON.
         for key, value in result.items():
             if isinstance(value, Path):
                 result[key] = str(value)
@@ -42,7 +42,7 @@ class ModelMetadata:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ModelMetadata":
         """Crée une instance depuis un dictionnaire."""
-        # Convertir les strings en Path pour les chemins
+        # Convertir les strings en Path pour les chemins.
         for key in ['model_path', 'scaler_user_path', 'scaler_item_path', 
                     'scaler_target_path', 'movie_dict_path', 'item_vecs_path', 
                     'unique_genres_path']:
@@ -70,7 +70,7 @@ class ModelVersionManager:
         self.default_version = default_version
         self.logger = logging.getLogger(__name__)
         
-        # S'assurer que le dossier existe
+        # S'assurer que le dossier existe.
         self.registry_path.mkdir(parents=True, exist_ok=True)
     
     def _get_git_commit_hash(self) -> Optional[str]:
@@ -132,12 +132,12 @@ class ModelVersionManager:
         version_dir = self.registry_path / version
         version_dir.mkdir(parents=True, exist_ok=True)
         
-        # Copier le modèle dans le dossier versionné
+        # Copier le modèle dans le dossier versionné.
         import shutil
         target_model_path = version_dir / "model.keras"
         shutil.copy2(model_path, target_model_path)
         
-        # Créer les métadonnées
+        # Créer les métadonnées.
         metadata = ModelMetadata(
             version=version,
             model_path=target_model_path,
@@ -156,7 +156,7 @@ class ModelVersionManager:
             unique_genres_path=unique_genres_path,
         )
         
-        # Sauvegarder les métadonnées
+        # Sauvegarder les métadonnées.
         metadata_path = version_dir / "metadata.json"
         with open(metadata_path, 'w', encoding='utf-8') as f:
             json.dump(metadata.to_dict(), f, indent=2, ensure_ascii=False)
@@ -176,7 +176,7 @@ class ModelVersionManager:
             if item.is_dir() and (item / "metadata.json").exists():
                 versions.append(item.name)
         
-        # Trier par version (v1, v2, etc.)
+        # Trier par version (v1, v2, etc.).
         def version_key(v: str) -> int:
             try:
                 return int(v.replace('v', ''))
@@ -241,11 +241,11 @@ class ModelVersionManager:
         Returns:
             Tuple (is_valid, error_message)
         """
-        # Vérifier que le fichier modèle existe
+        # Vérifier que le fichier modèle existe.
         if not metadata.model_path.exists():
             return False, f"Model file not found: {metadata.model_path}"
         
-        # Vérifier que les fichiers scalers existent si spécifiés
+        # Vérifier que les fichiers scalers existent si spécifiés.
         scaler_paths = [
             metadata.scaler_user_path,
             metadata.scaler_item_path,
@@ -255,15 +255,15 @@ class ModelVersionManager:
             if scaler_path and not scaler_path.exists():
                 return False, f"Scaler file not found: {scaler_path}"
         
-        # Vérifier les métadonnées critiques
+        # Vérifier les métadonnées critiques.
         if metadata.version is None or not metadata.version:
             return False, "Version is required"
         
         if metadata.training_date is None:
             return False, "Training date is required"
         
-        # Vérifier que le modèle n'est pas trop ancien (optionnel)
-        # On peut ajouter une logique ici pour rejeter les modèles > X jours
+        # Vérifier que le modèle n'est pas trop ancien (optionnel).
+        # On peut ajouter une logique ici pour rejeter les modèles > X jours.
         
         return True, None
     
@@ -285,7 +285,7 @@ class ModelVersionManager:
         if metadata is None:
             return None
         
-        # Valider les métadonnées
+        # Valider les métadonnées.
         is_valid, error = self.validate_metadata(metadata)
         if not is_valid:
             self.logger.error(f"Metadata validation failed: {error}")

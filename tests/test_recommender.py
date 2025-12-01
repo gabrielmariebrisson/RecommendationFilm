@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 # Les mocks sont dans conftest.py
-from core.recommender import MovieRecommender
+from src.core.recommender import MovieRecommender
 
 
 class TestMovieRecommender:
@@ -82,13 +82,29 @@ class TestMovieRecommender:
         return scaler_user, scaler_item, scaler_target
     
     @pytest.fixture
-    def mock_model(self):
+    def mock_model(self, mock_item_vecs):
         """Fixture pour le modèle Keras mocké."""
         model = Mock()
         # Le modèle.predict reçoit [suser_vecs, sitem_vecs] et retourne des prédictions
+        # On utilise mock_item_vecs pour déterminer num_items car c'est la source de vérité
+        expected_num_items = len(mock_item_vecs)
+        
         def mock_predict(inputs, verbose=0):
-            # Retourner un array de shape (num_items, 1)
-            num_items = inputs[0].shape[0]
+            # inputs est une liste [suser_broadcasted, sitem_vecs]
+            # suser_broadcasted a shape (num_items, num_features)
+            # sitem_vecs a shape (num_items, num_features)
+            # On utilise toujours expected_num_items pour garantir la cohérence
+            num_items = expected_num_items
+            # Vérification de sécurité : si inputs[1] existe et a une taille différente, utiliser celle-ci
+            if isinstance(inputs, list) and len(inputs) >= 2:
+                try:
+                    actual_num_items = inputs[1].shape[0]
+                    # Vérifier que actual_num_items est bien un nombre (int ou np.integer)
+                    # et non un MagicMock
+                    if isinstance(actual_num_items, (int, np.integer)) and actual_num_items > 0:
+                        num_items = int(actual_num_items)
+                except (AttributeError, IndexError, TypeError):
+                    pass
             return np.random.uniform(0.5, 1.0, size=(num_items, 1)).astype(np.float32)
         model.predict = Mock(side_effect=mock_predict)
         return model
@@ -147,19 +163,16 @@ class TestMovieRecommender:
             assert ratings == sorted(ratings, reverse=True)
     
     def test_generate_recommendations_empty_when_not_ready(self):
-        """Test que generate_recommendations retourne un DataFrame vide si le recommender n'est pas prêt."""
+        """Test que generate_recommendations lève une RuntimeError si le recommender n'est pas prêt."""
         # Arrange
         recommender = MovieRecommender()
         # Ne pas initialiser les composants
         
         user_ratings = {1: 4.5}
         
-        # Act
-        result = recommender.generate_recommendations(user_ratings)
-        
-        # Assert
-        assert isinstance(result, pd.DataFrame)
-        assert result.empty
+        # Act & Assert
+        with pytest.raises(RuntimeError, match="Recommender not ready"):
+            recommender.generate_recommendations(user_ratings)
     
     def test_generate_recommendations_empty_ratings(self, mock_movie_dict, mock_unique_genres,
                                                     mock_item_vecs, mock_scalers, mock_model):

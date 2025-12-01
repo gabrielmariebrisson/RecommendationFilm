@@ -58,6 +58,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
 # Run Streamlit app
-# Use the main app file (RecommandationFilmsWeb.py or app.py if exists)
 CMD ["streamlit", "run", "RecommandationFilmsWeb.py", "--server.port=8501", "--server.address=0.0.0.0"]
 

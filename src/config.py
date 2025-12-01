@@ -8,7 +8,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Chemins des fichiers ---
-BASE_DIR = Path(__file__).parent.resolve()
+# BASE_DIR pointe vers la racine du projet (parent de src/).
+BASE_DIR = Path(__file__).parent.parent.resolve()
 TEMPLATES_DIR = BASE_DIR / "templates"
 ASSETS_DIR = TEMPLATES_DIR / "assets"
 FILM_DIR = ASSETS_DIR / "film"
@@ -54,8 +55,8 @@ APP_LAYOUT = "wide"
 PORTFOLIO_URL = "https://gabriel.mariebrisson.fr"
 
 # --- Configuration du cache Streamlit ---
-CACHE_TTL_SECONDS = 3600  # 1 heure
+CACHE_TTL_SECONDS = 3600  # 1 heure.
 
 # --- Configuration du Model Registry ---
-MODEL_REGISTRY_PATH = BASE_DIR / "models"  # Dossier pour les versions de modèles
+MODEL_REGISTRY_PATH = BASE_DIR / "models"  # Dossier pour les versions de modèles.
 

@@ -1,15 +1,18 @@
 """Application Streamlit principale pour le système de recommandation de films."""
 
 import asyncio
+import warnings
 from typing import List, Set, Dict
 
 import streamlit as st
 import pandas as pd
 
-from core.recommender import MovieRecommender
-from core.monitoring import generate_trace_id
-from services.metadata import MetadataService, TranslationService
-from config import (
+# Supprimer les avertissements de version incohérente de scikit-learn.
+# Les scalers ont été picklés avec une version légèrement différente.
+warnings.filterwarnings('ignore', message='.*Trying to unpickle estimator.*', module='sklearn')
+
+from src.core.monitoring import generate_trace_id
+from src.config import (
     NO_POSTER_IMAGE_PATH,
     ARCHITECTURE_IMAGE_PATH,
     APP_TITLE,
@@ -17,57 +20,19 @@ from config import (
     PORTFOLIO_URL,
     DEFAULT_LANGUAGE,
 )
-
-
-# Initialisation des services
-@st.cache_resource
-def get_recommender() -> MovieRecommender:
-    """
-    Initialise et retourne le MovieRecommender.
-    
-    Tente de charger depuis le Model Registry si disponible,
-    sinon utilise les chemins par défaut.
-    """
-    from core.model_registry import ModelVersionManager
-    from config import MODEL_REGISTRY_PATH
-    
-    # Essayer de charger depuis le registre
-    registry = ModelVersionManager(registry_path=MODEL_REGISTRY_PATH)
-    latest_version = registry.get_latest_stable_version()
-    
-    if latest_version:
-        # Charger depuis le registre
-        recommender = MovieRecommender(
-            model_registry=registry,
-            model_version=latest_version,
-        )
-    else:
-        # Fallback vers les chemins par défaut
-        recommender = MovieRecommender()
-    
-    if not recommender.initialize():
-        st.error("Failed to initialize recommender. Check logs for details.")
-        return recommender
-    
-    return recommender
-
-
-@st.cache_resource
-def get_metadata_service() -> MetadataService:
-    """Initialise et retourne le MetadataService."""
-    return MetadataService()
-
-
-def get_translation_service() -> TranslationService:
-    """Initialise et retourne le TranslationService."""
-    return TranslationService()
-
+from src.streamlit_helpers import (
+    get_recommender,
+    get_metadata_service,
+    get_translation_service,
+    create_translation_function,
+    has_selected_genre,
+)
 
 # Configuration de la langue
 if 'language' not in st.session_state:
     st.session_state.language = DEFAULT_LANGUAGE
 
-translation_service: TranslationService = get_translation_service()
+translation_service = get_translation_service()
 lang_options: Dict[str, str] = translation_service.get_language_options()
 lang_codes: List[str] = translation_service.get_language_codes()
 
@@ -81,15 +46,12 @@ lang: str = st.sidebar.selectbox(
 
 st.session_state.language = lang
 
-
-def _(text: str) -> str:
-    """Fonction de traduction avec cache."""
-    return translation_service.translate(text, lang)
-
+# Créer la fonction de traduction
+_ = create_translation_function(translation_service, lang)
 
 # Initialisation des services
-recommender: MovieRecommender = get_recommender()
-metadata_service: MetadataService = get_metadata_service()
+recommender = get_recommender()
+metadata_service = get_metadata_service()
 
 # Bouton de redirection
 st.markdown(
@@ -131,7 +93,7 @@ if recommender.is_ready():
     if 'user_ratings' not in st.session_state:
         st.session_state.user_ratings = {}
     
-    # Recherche HORS du formulaire
+    # Recherche hors du formulaire.
     movie_list: List[str] = recommender.get_movie_list()
     search_term: str = st.sidebar.text_input(_("Rechercher un film à noter :"))
     
@@ -173,7 +135,7 @@ if recommender.is_ready():
     if len(st.session_state.user_ratings) >= 3:
         with st.spinner(_("Nous préparons votre sélection personnalisée...")):
             try:
-                # Générer un trace_id pour cette requête
+                # Générer un trace_id pour cette requête.
                 trace_id = generate_trace_id()
                 
                 recommendations_df: pd.DataFrame = recommender.generate_recommendations(
@@ -181,11 +143,11 @@ if recommender.is_ready():
                     trace_id=trace_id,
                 )
             except RuntimeError as e:
-                # Erreur attendue (modèle non prêt, etc.) - déjà loggée
+                # Erreur attendue (modèle non prêt, etc.) - déjà loggée.
                 st.error(_("Erreur lors de la génération des recommandations. Veuillez réessayer."))
                 recommendations_df = pd.DataFrame()
             except Exception as e:
-                # Erreur inattendue - déjà loggée avec stacktrace
+                # Erreur inattendue - déjà loggée avec stacktrace.
                 st.error(_("Une erreur inattendue s'est produite. Les logs ont été enregistrés."))
                 recommendations_df = pd.DataFrame()
         
@@ -201,14 +163,10 @@ if recommender.is_ready():
         selected_genres: List[str] = st.multiselect(_("Filtrer par genre :"), sorted_genres)
         
         if selected_genres:
-            def has_selected_genre(genres_str: str) -> bool:
-                """Vérifie si un film contient au moins un des genres sélectionnés."""
-                if pd.isna(genres_str) or not genres_str:
-                    return False
-                return any(g in str(genres_str) for g in selected_genres)
-            
             filtered_df: pd.DataFrame = recommendations_df[
-                recommendations_df['Genres'].apply(has_selected_genre)
+                recommendations_df['Genres'].apply(
+                    lambda genres_str: has_selected_genre(genres_str, selected_genres)
+                )
             ]
         else:
             filtered_df = recommendations_df
@@ -219,8 +177,8 @@ if recommender.is_ready():
         top_movies = filtered_df.head(20)
         movie_titles = [row['Titre'] for _, row in top_movies.iterrows()]
         
-        # Exécuter les appels asynchrones en parallèle
-        # Streamlit exécute chaque script dans un nouveau contexte, donc asyncio.run() fonctionne
+        # Exécuter les appels asynchrones en parallèle.
+        # Streamlit exécute chaque script dans un nouveau contexte, donc asyncio.run() fonctionne.
         movies_data_dict = asyncio.run(metadata_service.get_movies_data_batch(movie_titles))
         
         cols = st.columns(5)
@@ -249,7 +207,7 @@ Veuillez noter au moins 3 films dans la barre latérale pour débloquer vos reco
 Si on vous propose un film que vous avez déjà vu, il suffit de le noter pour qu'il ne vous soit plus proposé.
 Si on vous propose de mauvais films, il suffit de leur mettre une mauvaise note."""))
     
-    # Section Présentation
+    # --- Section Présentation ---
     st.header(_("Présentation"))
     st.markdown(_(
         """Ce projet vise à recommander des films en fonction des notes attribuées par les utilisateurs. À l'ère du numérique, 
@@ -274,7 +232,7 @@ Ce système s'appuie sur le jeu de données MovieLens, qui contient :
 - Multiples genres cinématographiques pour affiner les recommandations"""
     ))
     
-    # Section Architecture du Modèle
+    # --- Section Architecture du Modèle ---
     st.header(_("Architecture du Modèle"))
     st.markdown(_(
         """Notre système repose sur un **réseau de neurones siamois à deux branches**, une architecture particulièrement 
@@ -316,9 +274,9 @@ facilement convertible en note prédite sur l'échelle 0.5-5 étoiles.
 
 Malgré ces limitations, le modèle offre des recommandations fiables et pertinentes."""
     ))
-    st.image(str(ARCHITECTURE_IMAGE_PATH), caption=_("Architecture du modèle neuronal"), use_container_width=True)
+    st.image(str(ARCHITECTURE_IMAGE_PATH), caption=_("Architecture du modèle neuronal"), width='stretch')
     
-    # Section Résultats
+    # --- Section Résultats ---
     st.header(_("Performances du Modèle"))
     st.markdown(_(
         """**Capacités du système :**
@@ -338,7 +296,7 @@ représente une précision acceptable dans la prédiction des préférences cin�
 entre 0.25 et 0.40 sur MovieLens, positionnant notre modèle dans une fourchette compétitive."""
     ))
     
-    # Section Coût et Maintenance
+    # --- Section Coût et Maintenance ---
     st.header(_("Développement et Déploiement"))
     st.markdown(_(
         """**Infrastructure d'entraînement :**
@@ -369,7 +327,7 @@ entre 0.25 et 0.40 sur MovieLens, positionnant notre modèle dans une fourchette
 else:
     st.error(_("L'application n'a pas pu démarrer. Vérifiez les fichiers du modèle et des données."))
 
-# Footer
+# --- Footer ---
 st.markdown("---")
 st.markdown(_(
     """

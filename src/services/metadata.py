@@ -9,7 +9,7 @@ import requests
 from deep_translator import GoogleTranslator
 import streamlit as st
 
-from config import (
+from src.config import (
     API_KEY_FILM,
     OMDB_API_URL,
     OMDB_API_TIMEOUT,
@@ -115,21 +115,21 @@ class MetadataService:
         year: Optional[str] = None
         clean_title: str = title
         
-        # Extraction de l'année si présente dans le titre
+        # Extraction de l'année si présente dans le titre.
         if title and title[-1] == ")" and "(" in title:
             try:
                 year = title.split("(")[-1][:-1]
                 clean_title = title.rsplit("(", 1)[0].strip()
             except (IndexError, AttributeError) as e:
-                # Si l'extraction échoue, on continue avec le titre original
+                # Si l'extraction échoue, on continue avec le titre original.
                 st.debug(f"Impossible d'extraire l'année du titre '{title}': {e}")
         
-        # Construction de l'URL
+        # Construction de l'URL.
         url: str = f"{OMDB_API_URL}?t={clean_title}&apikey={self.api_key}"
         if year:
             url += f"&y={year}"
         
-        # Utiliser la session fournie ou en créer une nouvelle
+        # Utiliser la session fournie ou en créer une nouvelle.
         should_close_session = False
         if session is None:
             session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=OMDB_API_TIMEOUT))
@@ -198,24 +198,24 @@ class MetadataService:
         if not self.api_key or not titles:
             return {title: None for title in titles}
         
-        # Filtrer les titres vides
+        # Filtrer les titres vides.
         valid_titles = [title for title in titles if title and title.strip()]
         if not valid_titles:
             return {title: None for title in titles}
         
-        # Créer une session aiohttp partagée pour toutes les requêtes
+        # Créer une session aiohttp partagée pour toutes les requêtes.
         timeout = aiohttp.ClientTimeout(total=OMDB_API_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            # Créer toutes les tâches asynchrones
+            # Créer toutes les tâches asynchrones.
             tasks = [
                 self.get_movie_data_async(title, session)
                 for title in valid_titles
             ]
             
-            # Exécuter toutes les requêtes en parallèle
+            # Exécuter toutes les requêtes en parallèle.
             results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Construire le dictionnaire de résultats
+        # Construire le dictionnaire de résultats.
         movies_data: Dict[str, Optional[Dict[str, Any]]] = {}
         for title, result in zip(valid_titles, results):
             if isinstance(result, Exception):
@@ -224,7 +224,7 @@ class MetadataService:
             else:
                 movies_data[title] = result
         
-        # Ajouter None pour les titres invalides
+        # Ajouter None pour les titres invalides.
         for title in titles:
             if title not in movies_data:
                 movies_data[title] = None
@@ -264,12 +264,12 @@ class TranslationService:
         if target_language == 'fr' or target_language == self.default_language:
             return text
         
-        # Vérification du cache
+        # Vérification du cache.
         cache_key: str = f"{target_language}_{text}"
         if cache_key in st.session_state.translations_cache:
             return st.session_state.translations_cache[cache_key]
         
-        # Traduction
+        # Traduction.
         try:
             translator = GoogleTranslator(source='fr', target=target_language)
             translated: str = translator.translate(text)

@@ -73,15 +73,15 @@ class JSONFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         
-        # Ajouter trace_id si présent
+        # Ajouter trace_id si présent.
         if hasattr(record, "trace_id"):
             log_entry["trace_id"] = record.trace_id
         
-        # Ajouter des champs supplémentaires depuis extra
+        # Ajouter des champs supplémentaires depuis extra.
         if hasattr(record, "extra_fields"):
             log_entry.update(record.extra_fields)
         
-        # Ajouter exception info si présente
+        # Ajouter exception info si présente.
         if record.exc_info:
             log_entry["exception"] = {
                 "type": record.exc_info[0].__name__ if record.exc_info[0] else None,
@@ -89,7 +89,7 @@ class JSONFormatter(logging.Formatter):
                 "stacktrace": traceback.format_exception(*record.exc_info),
             }
         
-        # Ajouter stacktrace même sans exception si demandé
+        # Ajouter stacktrace même sans exception si demandé.
         if hasattr(record, "include_stacktrace") and record.include_stacktrace:
             log_entry["stacktrace"] = traceback.format_stack()
         
@@ -117,7 +117,7 @@ class StructuredLogger:
         self.logger.setLevel(level)
         self.service_name = service_name
         
-        # Éviter les handlers duplicatés
+        # Éviter les handlers duplicatés.
         if not self.logger.handlers:
             handler = logging.StreamHandler()
             handler.setFormatter(JSONFormatter(service_name=service_name))
@@ -249,11 +249,15 @@ class StructuredLogger:
         trace_id = trace_id or metrics.trace_id
         level = logging.ERROR if metrics.error else logging.INFO
         
+        # Exclure trace_id du dictionnaire pour éviter le conflit.
+        metrics_dict = metrics.to_dict()
+        metrics_dict.pop('trace_id', None)
+        
         self._log(
             level,
             "recommendation_metrics",
             trace_id=trace_id,
-            **metrics.to_dict(),
+            **metrics_dict,
         )
 
 
@@ -267,7 +271,7 @@ def generate_trace_id() -> str:
     return str(uuid.uuid4())
 
 
-# Instance globale du logger (peut être remplacée pour les tests)
+# Instance globale du logger (peut être remplacée pour les tests).
 _default_logger: Optional[StructuredLogger] = None
 
 

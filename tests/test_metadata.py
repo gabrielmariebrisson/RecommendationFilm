@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 import requests
 
-from services.metadata import MetadataService
+from src.services.metadata import MetadataService
 
 
 class TestMetadataService:
@@ -12,7 +12,7 @@ class TestMetadataService:
     
     def test_get_movie_data_success(self):
         """Test de récupération réussie des métadonnées d'un film."""
-        # Arrange
+        # Arrange.
         mock_response_data = {
             "Response": "True",
             "Title": "The Matrix",
@@ -32,11 +32,11 @@ class TestMetadataService:
         
         service = MetadataService(api_key="test_api_key")
         
-        # Act
-        with patch('services.metadata.requests.get', return_value=mock_response):
+        # Act.
+        with patch('src.services.metadata.requests.get', return_value=mock_response):
             result = service.get_movie_data("The Matrix")
         
-        # Assert
+        # Assert.
         assert result is not None
         assert result["title"] == "The Matrix"
         assert result["year"] == "1999"
@@ -69,10 +69,10 @@ class TestMetadataService:
         
         service = MetadataService(api_key="test_api_key")
         
-        with patch('services.metadata.requests.get', return_value=mock_response) as mock_get:
+        with patch('src.services.metadata.requests.get', return_value=mock_response) as mock_get:
             result = service.get_movie_data("The Matrix (1999)")
             
-            # Vérifier que l'année a été extraite et ajoutée à l'URL
+            # Vérifier que l'année a été extraite et ajoutée à l'URL.
             call_args = mock_get.call_args
             url = call_args[0][0] if call_args[0] else str(call_args)
             assert "y=1999" in url or "y=1999" in str(call_args)
@@ -93,7 +93,7 @@ class TestMetadataService:
         
         service = MetadataService(api_key="test_api_key")
         
-        with patch('services.metadata.requests.get', return_value=mock_response):
+        with patch('src.services.metadata.requests.get', return_value=mock_response):
             result = service.get_movie_data("Film Inexistant")
         
         assert result is None
@@ -105,7 +105,7 @@ class TestMetadataService:
         
         service = MetadataService(api_key="test_api_key")
         
-        with patch('services.metadata.requests.get', return_value=mock_response):
+        with patch('src.services.metadata.requests.get', return_value=mock_response):
             result = service.get_movie_data("Film Inexistant")
         
         assert result is None
@@ -114,7 +114,7 @@ class TestMetadataService:
         """Test de gestion d'un timeout."""
         service = MetadataService(api_key="test_api_key")
         
-        with patch('services.metadata.requests.get', side_effect=requests.exceptions.Timeout("Timeout")):
+        with patch('src.services.metadata.requests.get', side_effect=requests.exceptions.Timeout("Timeout")):
             result = service.get_movie_data("The Matrix")
         
         assert result is None
@@ -132,25 +132,26 @@ class TestMetadataService:
         mock_response.json.return_value = mock_response_data
         mock_response.raise_for_status.return_value = None
         
-        with patch('services.metadata.requests.get', return_value=mock_response):
+        with patch('src.services.metadata.requests.get', return_value=mock_response):
             result = service.get_movie_data("")
         
-        # L'API devrait retourner une erreur pour un titre vide
+        # L'API devrait retourner une erreur pour un titre vide.
         assert result is None
     
     def test_get_movie_data_no_api_key(self):
         """Test sans clé API."""
-        service = MetadataService(api_key=None)
-        
-        result = service.get_movie_data("The Matrix")
-        
-        assert result is None
+        with patch('src.services.metadata.API_KEY_FILM', None):
+            service = MetadataService(api_key=None)
+            
+            result = service.get_movie_data("The Matrix")
+            
+            assert result is None
     
     def test_get_movie_data_request_exception(self):
         """Test de gestion d'une exception de requête générique."""
         service = MetadataService(api_key="test_api_key")
         
-        with patch('services.metadata.requests.get', side_effect=requests.exceptions.RequestException("Network error")):
+        with patch('src.services.metadata.requests.get', side_effect=requests.exceptions.RequestException("Network error")):
             result = service.get_movie_data("The Matrix")
         
         assert result is None
@@ -163,7 +164,7 @@ class TestMetadataService:
         
         service = MetadataService(api_key="test_api_key")
         
-        with patch('services.metadata.requests.get', return_value=mock_response):
+        with patch('src.services.metadata.requests.get', return_value=mock_response):
             result = service.get_movie_data("The Matrix")
         
         assert result is None
@@ -182,7 +183,7 @@ class TestMetadataService:
         
         service = MetadataService(api_key="test_api_key")
         
-        with patch('services.metadata.requests.get', return_value=mock_response):
+        with patch('src.services.metadata.requests.get', return_value=mock_response):
             result = service.get_movie_data("The Matrix")
         
         assert result is not None

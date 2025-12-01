@@ -11,12 +11,12 @@ import statistics
 import numpy as np
 import pandas as pd
 
-# Ajouter le répertoire parent au path pour les imports
+# Ajouter le répertoire parent au path pour les imports.
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.recommender import MovieRecommender
-from core.monitoring import generate_trace_id
+from src.core.recommender import MovieRecommender
+from src.core.monitoring import generate_trace_id
 
 
 class BenchmarkResults:
@@ -104,7 +104,7 @@ def generate_mock_user_ratings(
         random.seed(seed)
     
     if movie_ids is None:
-        # IDs mockés si pas de movie_dict disponible
+        # IDs mockés si pas de movie_dict disponible.
         movie_ids = list(range(1, 1000))
     
     selected_movies = random.sample(movie_ids, min(num_ratings, len(movie_ids)))
@@ -170,14 +170,14 @@ def benchmark_concurrent_users(
     """
     results = BenchmarkResults()
     
-    # Générer des user_ratings mockées avec seeds pour reproductibilité
+    # Générer des user_ratings mockées avec seeds pour reproductibilité.
     movie_ids = list(recommender.movie_dict.keys()) if recommender.movie_dict else None
     user_ratings_list = [
         generate_mock_user_ratings(movie_ids=movie_ids, seed=i)
         for i in range(num_users)
     ]
     
-    # Exécuter les requêtes en parallèle
+    # Exécuter les requêtes en parallèle.
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [
             executor.submit(benchmark_single_user, recommender, ratings)
@@ -251,7 +251,7 @@ def estimate_daily_capacity(results: Dict) -> Dict:
     Returns:
         Estimation de capacité
     """
-    # Utiliser les résultats de 1000 utilisateurs comme baseline
+    # Utiliser les résultats de 1000 utilisateurs comme baseline.
     baseline = results.get("1000_users", {})
     
     if not baseline or "throughput_req_per_sec" not in baseline:
@@ -259,14 +259,14 @@ def estimate_daily_capacity(results: Dict) -> Dict:
     
     throughput = baseline["throughput_req_per_sec"]
     
-    # Calculs de capacité
+    # Calculs de capacité.
     seconds_per_day = 86400
     requests_per_day = throughput * seconds_per_day
     
-    # Estimation conservative (70% de la capacité théorique pour marge de sécurité)
+    # Estimation conservative (70% de la capacité théorique pour marge de sécurité).
     conservative_capacity = int(requests_per_day * 0.7)
     
-    # Estimation optimiste (90% de la capacité théorique)
+    # Estimation optimiste (90% de la capacité théorique).
     optimistic_capacity = int(requests_per_day * 0.9)
     
     return {
@@ -285,7 +285,7 @@ def main():
     print("🎬 Movie Recommendation System - Performance Benchmark")
     print("=" * 60)
     
-    # Initialiser le recommender
+    # Initialiser le recommender.
     print("\n📦 Initializing MovieRecommender...")
     recommender = MovieRecommender()
     
@@ -300,13 +300,13 @@ def main():
     print("✅ Recommender initialized successfully")
     print(f"   Movies in catalog: {len(recommender.movie_dict) if recommender.movie_dict else 0}")
     
-    # Exécuter les benchmarks
+    # Exécuter les benchmarks.
     results = run_benchmark_suite(recommender)
     
-    # Estimer la capacité quotidienne
+    # Estimer la capacité quotidienne.
     capacity = estimate_daily_capacity(results)
     
-    # Afficher les résultats
+    # Afficher les résultats.
     print("\n" + "=" * 60)
     print("📈 BENCHMARK RESULTS SUMMARY")
     print("=" * 60)
@@ -331,7 +331,7 @@ def main():
         print(f"  Can handle 1M+/day: {'✅ YES' if capacity['can_handle_1m_per_day'] else '❌ NO'}")
         print(f"  Can handle 10M+/day: {'✅ YES' if capacity['can_handle_10m_per_day'] else '❌ NO'}")
     
-    # Sauvegarder les résultats pour le rapport
+    # Sauvegarder les résultats pour le rapport.
     return {
         "benchmark_results": results,
         "capacity_estimation": capacity,

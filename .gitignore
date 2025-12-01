@@ -1,20 +1,260 @@
-# Ignorer tous les fichiers .DS_Store
-.DS_Store
-**/.DS_Store
-
-
-# Ignorer les fichiers de logs
-*.log
-
-# Ignorer les fichiers Python compilés
-*.pyc
-*.pyo
+# Byte-compiled / optimized / DLL files
 __pycache__/
+*.py[cod]
+*$py.class
 
-# Ignorer les environnements virtuels
-venv/
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.conda/
 
-# Ignorer les fichiers de configuration IDE
-.idea/
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# IDEs
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# TensorFlow / Keras
+*.h5
+*.pb
+*.tflite
+*.lite
+*.tfl
+*.pb
+*.ckpt
+*.index
+*.meta
+*.data-*
+
+# Modèles ML volumineux (optionnel - décommenter si vous ne voulez pas versionner les modèles)
+# templates/assets/film/*.keras
+# templates/assets/film/*.pkl
+# models/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Fichiers temporaires
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Fichiers de configuration sensibles
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.yaml
+secrets.yml
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# GitHub
+.github/workflows/*.yml.bak
+
+# Fichiers de benchmark/rapports
+benchmark_results/
+performance_reports/
+*.csv
+*.json
+!requirements.txt
+!package.json
+!package-lock.json
+
+# Fichiers de sauvegarde
+*.backup
+*.old
+
+# Fichiers de cache
+.cache/
+*.cache
+
+# Fichiers de données volumineux (optionnel)
+# data/
+# datasets/
+
+# Fichiers de test temporaires
+test_output/
+test_results/
+
+# Fichiers de documentation générés
+docs/_build/
+site/
+
+# Fichiers de déploiement
+*.war
+*.jar
+*.ear
+
+# Fichiers de compression
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Fichiers de base de données
+*.db
+*.sqlite
+*.sqlite3
+
+# Fichiers de configuration locaux
+config.local.py
+settings.local.py
+

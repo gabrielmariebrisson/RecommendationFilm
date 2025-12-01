@@ -4,11 +4,11 @@ import argparse
 import sys
 from pathlib import Path
 
-# Ajouter le répertoire parent au path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Ajouter le répertoire parent de src/ au path.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.model_registry import ModelVersionManager
-from config import (
+from src.core.model_registry import ModelVersionManager
+from src.config import (
     MODEL_REGISTRY_PATH,
     MODEL_PATH,
     SCALER_USER_PATH,
@@ -100,15 +100,15 @@ def main():
     
     args = parser.parse_args()
     
-    # Vérifier que le fichier modèle existe
+    # Vérifier que le fichier modèle existe.
     if not args.model_path.exists():
         print(f"❌ Erreur: Le fichier modèle n'existe pas: {args.model_path}")
         return 1
     
-    # Créer le gestionnaire de registre
+    # Créer le gestionnaire de registre.
     registry = ModelVersionManager(registry_path=MODEL_REGISTRY_PATH)
     
-    # Enregistrer le modèle
+    # Enregistrer le modèle.
     try:
         metadata = registry.register_model(
             model_path=args.model_path,
