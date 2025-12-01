@@ -12,6 +12,7 @@ from enum import Enum
 
 class LogLevel(str, Enum):
     """Niveaux de log standardisés."""
+
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
@@ -22,6 +23,7 @@ class LogLevel(str, Enum):
 @dataclass
 class RecommendationMetrics:
     """Métriques pour une requête de recommandation."""
+
     trace_id: str
     num_input_ratings: int
     num_recommendations: int
@@ -30,12 +32,12 @@ class RecommendationMetrics:
     error: Optional[str] = None
     error_type: Optional[str] = None
     timestamp: Optional[str] = None
-    
+
     def __post_init__(self):
         """Génère le timestamp si non fourni."""
         if self.timestamp is None:
             self.timestamp = datetime.now(timezone.utc).isoformat()
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convertit les métriques en dictionnaire."""
         return asdict(self)
@@ -43,24 +45,24 @@ class RecommendationMetrics:
 
 class JSONFormatter(logging.Formatter):
     """Formateur de logs au format JSON structuré."""
-    
+
     def __init__(self, service_name: str = "movie-recommender"):
         """
         Initialise le formateur JSON.
-        
+
         Args:
             service_name: Nom du service pour identification
         """
         super().__init__()
         self.service_name = service_name
-    
+
     def format(self, record: logging.LogRecord) -> str:
         """
         Formate un log record en JSON.
-        
+
         Args:
             record: LogRecord à formater
-        
+
         Returns:
             Chaîne JSON formatée
         """
@@ -72,15 +74,15 @@ class JSONFormatter(logging.Formatter):
             "service": self.service_name,
             "message": record.getMessage(),
         }
-        
+
         # Ajouter trace_id si présent.
         if hasattr(record, "trace_id"):
             log_entry["trace_id"] = record.trace_id
-        
+
         # Ajouter des champs supplémentaires depuis extra.
         if hasattr(record, "extra_fields"):
             log_entry.update(record.extra_fields)
-        
+
         # Ajouter exception info si présente.
         if record.exc_info:
             log_entry["exception"] = {
@@ -88,17 +90,17 @@ class JSONFormatter(logging.Formatter):
                 "message": str(record.exc_info[1]) if record.exc_info[1] else None,
                 "stacktrace": traceback.format_exception(*record.exc_info),
             }
-        
+
         # Ajouter stacktrace même sans exception si demandé.
         if hasattr(record, "include_stacktrace") and record.include_stacktrace:
             log_entry["stacktrace"] = traceback.format_stack()
-        
+
         return json.dumps(log_entry, ensure_ascii=False)
 
 
 class StructuredLogger:
     """Logger structuré pour production avec support JSON et trace IDs."""
-    
+
     def __init__(
         self,
         name: str = "movie-recommender",
@@ -107,7 +109,7 @@ class StructuredLogger:
     ):
         """
         Initialise le logger structuré.
-        
+
         Args:
             name: Nom du logger
             service_name: Nom du service pour les logs
@@ -116,13 +118,13 @@ class StructuredLogger:
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
         self.service_name = service_name
-        
+
         # Éviter les handlers duplicatés.
         if not self.logger.handlers:
             handler = logging.StreamHandler()
             handler.setFormatter(JSONFormatter(service_name=service_name))
             self.logger.addHandler(handler)
-    
+
     def _log(
         self,
         level: int,
@@ -132,7 +134,7 @@ class StructuredLogger:
     ) -> None:
         """
         Méthode interne pour logger avec trace_id et champs supplémentaires.
-        
+
         Args:
             level: Niveau de log (logging.INFO, etc.)
             message: Message à logger
@@ -142,9 +144,9 @@ class StructuredLogger:
         extra = {"trace_id": trace_id} if trace_id else {}
         if kwargs:
             extra["extra_fields"] = kwargs
-        
+
         self.logger.log(level, message, extra=extra)
-    
+
     def debug(
         self,
         message: str,
@@ -153,7 +155,7 @@ class StructuredLogger:
     ) -> None:
         """Log au niveau DEBUG."""
         self._log(logging.DEBUG, message, trace_id, **kwargs)
-    
+
     def info(
         self,
         message: str,
@@ -162,7 +164,7 @@ class StructuredLogger:
     ) -> None:
         """Log au niveau INFO."""
         self._log(logging.INFO, message, trace_id, **kwargs)
-    
+
     def warning(
         self,
         message: str,
@@ -171,7 +173,7 @@ class StructuredLogger:
     ) -> None:
         """Log au niveau WARNING."""
         self._log(logging.WARNING, message, trace_id, **kwargs)
-    
+
     def error(
         self,
         message: str,
@@ -182,7 +184,7 @@ class StructuredLogger:
     ) -> None:
         """
         Log au niveau ERROR avec gestion d'exception.
-        
+
         Args:
             message: Message d'erreur
             error: Exception à logger (optionnel)
@@ -195,7 +197,7 @@ class StructuredLogger:
             extra["extra_fields"] = kwargs
         if include_stacktrace:
             extra["include_stacktrace"] = True
-        
+
         if error:
             self.logger.error(
                 message,
@@ -204,7 +206,7 @@ class StructuredLogger:
             )
         else:
             self.logger.error(message, extra=extra)
-    
+
     def critical(
         self,
         message: str,
@@ -214,7 +216,7 @@ class StructuredLogger:
     ) -> None:
         """
         Log au niveau CRITICAL avec gestion d'exception.
-        
+
         Args:
             message: Message critique
             error: Exception à logger (optionnel)
@@ -224,7 +226,7 @@ class StructuredLogger:
         extra = {"trace_id": trace_id} if trace_id else {}
         if kwargs:
             extra["extra_fields"] = kwargs
-        
+
         if error:
             self.logger.critical(
                 message,
@@ -233,7 +235,7 @@ class StructuredLogger:
             )
         else:
             self.logger.critical(message, extra=extra)
-    
+
     def log_metrics(
         self,
         metrics: RecommendationMetrics,
@@ -241,18 +243,18 @@ class StructuredLogger:
     ) -> None:
         """
         Log les métriques de recommandation.
-        
+
         Args:
             metrics: Métriques à logger
             trace_id: ID de trace (utilise celui des métriques si None)
         """
         trace_id = trace_id or metrics.trace_id
         level = logging.ERROR if metrics.error else logging.INFO
-        
+
         # Exclure trace_id du dictionnaire pour éviter le conflit.
         metrics_dict = metrics.to_dict()
-        metrics_dict.pop('trace_id', None)
-        
+        metrics_dict.pop("trace_id", None)
+
         self._log(
             level,
             "recommendation_metrics",
@@ -264,7 +266,7 @@ class StructuredLogger:
 def generate_trace_id() -> str:
     """
     Génère un ID de trace unique.
-    
+
     Returns:
         UUID4 formaté en string
     """
@@ -281,11 +283,11 @@ def get_logger(
 ) -> StructuredLogger:
     """
     Obtient ou crée l'instance globale du logger.
-    
+
     Args:
         name: Nom du logger
         service_name: Nom du service
-    
+
     Returns:
         Instance de StructuredLogger
     """
@@ -293,4 +295,3 @@ def get_logger(
     if _default_logger is None:
         _default_logger = StructuredLogger(name=name, service_name=service_name)
     return _default_logger
-

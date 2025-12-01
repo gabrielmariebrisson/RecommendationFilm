@@ -26,88 +26,88 @@ def main():
         description="Enregistre un modèle dans le Model Registry"
     )
     parser.add_argument(
-        'version',
+        "version",
         type=str,
-        help='Version du modèle (ex: v1, v2)',
+        help="Version du modèle (ex: v1, v2)",
     )
     parser.add_argument(
-        '--model-path',
+        "--model-path",
         type=Path,
         default=MODEL_PATH,
-        help='Chemin vers le fichier .keras du modèle',
+        help="Chemin vers le fichier .keras du modèle",
     )
     parser.add_argument(
-        '--accuracy',
+        "--accuracy",
         type=float,
-        help='Précision du modèle (optionnel)',
+        help="Précision du modèle (optionnel)",
     )
     parser.add_argument(
-        '--rmse',
+        "--rmse",
         type=float,
-        help='RMSE du modèle (optionnel)',
+        help="RMSE du modèle (optionnel)",
     )
     parser.add_argument(
-        '--mse',
+        "--mse",
         type=float,
-        help='MSE du modèle (optionnel)',
+        help="MSE du modèle (optionnel)",
     )
     parser.add_argument(
-        '--description',
+        "--description",
         type=str,
-        help='Description du modèle (optionnel)',
+        help="Description du modèle (optionnel)",
     )
     parser.add_argument(
-        '--unstable',
-        action='store_true',
-        help='Marquer le modèle comme instable (non-stable)',
+        "--unstable",
+        action="store_true",
+        help="Marquer le modèle comme instable (non-stable)",
     )
     parser.add_argument(
-        '--scaler-user',
+        "--scaler-user",
         type=Path,
         default=SCALER_USER_PATH,
-        help='Chemin vers le scaler utilisateur',
+        help="Chemin vers le scaler utilisateur",
     )
     parser.add_argument(
-        '--scaler-item',
+        "--scaler-item",
         type=Path,
         default=SCALER_ITEM_PATH,
-        help='Chemin vers le scaler item',
+        help="Chemin vers le scaler item",
     )
     parser.add_argument(
-        '--scaler-target',
+        "--scaler-target",
         type=Path,
         default=SCALER_TARGET_PATH,
-        help='Chemin vers le scaler target',
+        help="Chemin vers le scaler target",
     )
     parser.add_argument(
-        '--movie-dict',
+        "--movie-dict",
         type=Path,
         default=MOVIE_DICT_PATH,
-        help='Chemin vers le dictionnaire des films',
+        help="Chemin vers le dictionnaire des films",
     )
     parser.add_argument(
-        '--item-vecs',
+        "--item-vecs",
         type=Path,
         default=ITEM_VECS_PATH,
-        help='Chemin vers les vecteurs d\'items',
+        help="Chemin vers les vecteurs d'items",
     )
     parser.add_argument(
-        '--unique-genres',
+        "--unique-genres",
         type=Path,
         default=UNIQUE_GENRES_PATH,
-        help='Chemin vers les genres uniques',
+        help="Chemin vers les genres uniques",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Vérifier que le fichier modèle existe.
     if not args.model_path.exists():
         print(f"❌ Erreur: Le fichier modèle n'existe pas: {args.model_path}")
         return 1
-    
+
     # Créer le gestionnaire de registre.
     registry = ModelVersionManager(registry_path=MODEL_REGISTRY_PATH)
-    
+
     # Enregistrer le modèle.
     try:
         metadata = registry.register_model(
@@ -125,7 +125,7 @@ def main():
             item_vecs_path=args.item_vecs,
             unique_genres_path=args.unique_genres,
         )
-        
+
         print(f"✅ Modèle version {args.version} enregistré avec succès!")
         print(f"   Chemin: {metadata.model_path}")
         print(f"   Date d'entraînement: {metadata.training_date}")
@@ -135,9 +135,9 @@ def main():
             print(f"   RMSE: {metadata.rmse:.4f}")
         if metadata.accuracy:
             print(f"   Accuracy: {metadata.accuracy:.4f}")
-        
+
         return 0
-        
+
     except Exception as e:
         print(f"❌ Erreur lors de l'enregistrement: {e}")
         return 1
@@ -145,4 +145,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

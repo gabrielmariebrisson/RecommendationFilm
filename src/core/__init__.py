@@ -13,12 +13,11 @@ from .model_registry import (
 )
 
 __all__ = [
-    'MovieRecommender',
-    'StructuredLogger',
-    'RecommendationMetrics',
-    'generate_trace_id',
-    'get_logger',
-    'ModelVersionManager',
-    'ModelMetadata',
+    "MovieRecommender",
+    "StructuredLogger",
+    "RecommendationMetrics",
+    "generate_trace_id",
+    "get_logger",
+    "ModelVersionManager",
+    "ModelMetadata",
 ]
-

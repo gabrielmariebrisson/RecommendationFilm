@@ -29,7 +29,7 @@ NO_POSTER_IMAGE_PATH = IMAGES_DIR / "no-poster.jpg"
 ARCHITECTURE_IMAGE_PATH = FILM_DIR / "architecture_model.png"
 
 # --- Configuration API ---
-API_KEY_FILM = os.getenv('API_KEY_FILM')
+API_KEY_FILM = os.getenv("API_KEY_FILM")
 OMDB_API_URL = "http://www.omdbapi.com/"
 OMDB_API_TIMEOUT = 10
 
@@ -44,7 +44,7 @@ LANGUAGES: Dict[str, str] = {
     "ja": "🇯🇵 日本語",
     "zh-CN": "🇨🇳 中文",
     "ar": "🇸🇦 العربية",
-    "ru": "🇷🇺 Русский"
+    "ru": "🇷🇺 Русский",
 }
 
 DEFAULT_LANGUAGE = "fr"
@@ -59,4 +59,3 @@ CACHE_TTL_SECONDS = 3600  # 1 heure.
 
 # --- Configuration du Model Registry ---
 MODEL_REGISTRY_PATH = BASE_DIR / "models"  # Dossier pour les versions de modèles.
-

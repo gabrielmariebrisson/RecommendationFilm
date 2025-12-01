@@ -9,7 +9,9 @@ import pandas as pd
 
 # Supprimer les avertissements de version incohérente de scikit-learn.
 # Les scalers ont été picklés avec une version légèrement différente.
-warnings.filterwarnings('ignore', message='.*Trying to unpickle estimator.*', module='sklearn')
+warnings.filterwarnings(
+    "ignore", message=".*Trying to unpickle estimator.*", module="sklearn"
+)
 
 from src.core.monitoring import generate_trace_id
 from src.config import (
@@ -29,7 +31,7 @@ from src.streamlit_helpers import (
 )
 
 # Configuration de la langue
-if 'language' not in st.session_state:
+if "language" not in st.session_state:
     st.session_state.language = DEFAULT_LANGUAGE
 
 translation_service = get_translation_service()
@@ -41,7 +43,11 @@ lang: str = st.sidebar.selectbox(
     "🌐 Language / Langue",
     options=lang_codes,
     format_func=lambda x: lang_options[x],
-    index=lang_codes.index(st.session_state.language) if st.session_state.language in lang_codes else 0
+    index=(
+        lang_codes.index(st.session_state.language)
+        if st.session_state.language in lang_codes
+        else 0
+    ),
 )
 
 st.session_state.language = lang
@@ -79,7 +85,7 @@ st.markdown(
     </div>
     </a>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 # --- Interface Streamlit ---
@@ -89,37 +95,43 @@ st.title(_("🎬 Ciné-Reco : Votre Guide Cinéma Personnalisé"))
 if recommender.is_ready():
     # --- Barre latérale pour la notation ---
     st.sidebar.header(_("🔍 Notez des films"))
-    
-    if 'user_ratings' not in st.session_state:
+
+    if "user_ratings" not in st.session_state:
         st.session_state.user_ratings = {}
-    
+
     # Recherche hors du formulaire.
     movie_list: List[str] = recommender.get_movie_list()
     search_term: str = st.sidebar.text_input(_("Rechercher un film à noter :"))
-    
+
     if search_term:
         filtered_movie_list: List[str] = [
             m for m in movie_list if search_term.lower() in m.lower()
         ]
     else:
         filtered_movie_list = movie_list[:1000]
-    
+
     with st.sidebar.form("rating_form"):
         if filtered_movie_list:
-            selected_movie_title: str = st.selectbox(_("Choisissez un film"), filtered_movie_list)
+            selected_movie_title: str = st.selectbox(
+                _("Choisissez un film"), filtered_movie_list
+            )
         else:
-            st.warning(_("Aucun film trouvé pour cette recherche. Essaie avec un titre en anglais ou un film sorti avant 2024."))
+            st.warning(
+                _(
+                    "Aucun film trouvé pour cette recherche. Essaie avec un titre en anglais ou un film sorti avant 2024."
+                )
+            )
             selected_movie_title = None
-        
+
         rating: float = st.slider(_("Votre note"), 1.0, 5.0, 3.0, 0.5)
         submitted: bool = st.form_submit_button(_("Ajouter la note"))
-        
+
         if submitted and selected_movie_title:
             movie_id = recommender.get_movie_id_by_title(selected_movie_title)
             if movie_id:
                 st.session_state.user_ratings[movie_id] = rating
                 st.success(_("Note ajoutée pour :") + f" {selected_movie_title}")
-    
+
     if st.session_state.user_ratings:
         st.sidebar.subheader(_("Vos notes :"))
         for movie_id, rating in st.session_state.user_ratings.items():
@@ -129,7 +141,7 @@ if recommender.is_ready():
         if st.sidebar.button(_("🗑️ Vider les notes")):
             st.session_state.user_ratings = {}
             st.rerun()
-    
+
     # --- Affichage principal des recommandations ---
     st.header(_("🌟 Vos Recommandations Personnalisées"))
     if len(st.session_state.user_ratings) >= 3:
@@ -137,80 +149,110 @@ if recommender.is_ready():
             try:
                 # Générer un trace_id pour cette requête.
                 trace_id = generate_trace_id()
-                
+
                 recommendations_df: pd.DataFrame = recommender.generate_recommendations(
                     st.session_state.user_ratings,
                     trace_id=trace_id,
                 )
             except RuntimeError as e:
                 # Erreur attendue (modèle non prêt, etc.) - déjà loggée.
-                st.error(_("Erreur lors de la génération des recommandations. Veuillez réessayer."))
+                st.error(
+                    _(
+                        "Erreur lors de la génération des recommandations. Veuillez réessayer."
+                    )
+                )
                 recommendations_df = pd.DataFrame()
             except Exception as e:
                 # Erreur inattendue - déjà loggée avec stacktrace.
-                st.error(_("Une erreur inattendue s'est produite. Les logs ont été enregistrés."))
+                st.error(
+                    _(
+                        "Une erreur inattendue s'est produite. Les logs ont été enregistrés."
+                    )
+                )
                 recommendations_df = pd.DataFrame()
-        
+
         # Filtrage par genre
         all_genres: Set[str] = set()
-        for genres_str in recommendations_df['Genres'].dropna():
+        for genres_str in recommendations_df["Genres"].dropna():
             if genres_str and genres_str != "(no genres listed)":
-                for genre in str(genres_str).split('|'):
+                for genre in str(genres_str).split("|"):
                     if genre.strip():
                         all_genres.add(genre.strip())
-        
+
         sorted_genres: List[str] = sorted(list(all_genres))
-        selected_genres: List[str] = st.multiselect(_("Filtrer par genre :"), sorted_genres)
-        
+        selected_genres: List[str] = st.multiselect(
+            _("Filtrer par genre :"), sorted_genres
+        )
+
         if selected_genres:
             filtered_df: pd.DataFrame = recommendations_df[
-                recommendations_df['Genres'].apply(
+                recommendations_df["Genres"].apply(
                     lambda genres_str: has_selected_genre(genres_str, selected_genres)
                 )
             ]
         else:
             filtered_df = recommendations_df
-        
-        st.subheader(_("Top") + f" {min(20, len(filtered_df))} " + _("des films pour vous :"))
-        
+
+        st.subheader(
+            _("Top") + f" {min(20, len(filtered_df))} " + _("des films pour vous :")
+        )
+
         # Récupérer les métadonnées de tous les films en parallèle
         top_movies = filtered_df.head(20)
-        movie_titles = [row['Titre'] for _, row in top_movies.iterrows()]
-        
+        movie_titles = [row["Titre"] for _, row in top_movies.iterrows()]
+
         # Exécuter les appels asynchrones en parallèle.
         # Streamlit exécute chaque script dans un nouveau contexte, donc asyncio.run() fonctionne.
-        movies_data_dict = asyncio.run(metadata_service.get_movies_data_batch(movie_titles))
-        
+        movies_data_dict = asyncio.run(
+            metadata_service.get_movies_data_batch(movie_titles)
+        )
+
         cols = st.columns(5)
         for i, (idx, row) in enumerate(top_movies.iterrows()):
             col = cols[i % 5]
             with col:
-                movie_data = movies_data_dict.get(row['Titre'])
-                
-                if movie_data and movie_data.get("poster") and movie_data["poster"] != "N/A":
-                    st.image(movie_data["poster"], caption=f"{row['Note Prédite']:.1f} ⭐")
+                movie_data = movies_data_dict.get(row["Titre"])
+
+                if (
+                    movie_data
+                    and movie_data.get("poster")
+                    and movie_data["poster"] != "N/A"
+                ):
+                    st.image(
+                        movie_data["poster"], caption=f"{row['Note Prédite']:.1f} ⭐"
+                    )
                 else:
-                    st.image(str(NO_POSTER_IMAGE_PATH), caption=f"{row['Note Prédite']:.1f} ⭐")
-                
+                    st.image(
+                        str(NO_POSTER_IMAGE_PATH),
+                        caption=f"{row['Note Prédite']:.1f} ⭐",
+                    )
+
                 with st.expander(f"_{row['Titre']}_"):
-                    st.write(f"**{_('Genres')} :** {movie_data['genre'] if movie_data else row['Genres']}")
+                    st.write(
+                        f"**{_('Genres')} :** {movie_data['genre'] if movie_data else row['Genres']}"
+                    )
                     st.write(f"**{_('Note prédite')} :** {row['Note Prédite']:.2f}")
                     if movie_data:
                         st.write(f"**{_('Acteurs')} :** {movie_data['actors']}")
                         st.write(f"**{_('Résumé')} :** {movie_data['plot']}")
                         st.write(f"**{_('Note IMDb')} :** {movie_data['rating']} ⭐")
                         st.write(f"**{_('Année')} :** {movie_data['year']}")
-    
+
     else:
-        st.info(_("""👋 Bienvenue !
+        st.info(
+            _(
+                """👋 Bienvenue !
 Veuillez noter au moins 3 films dans la barre latérale pour débloquer vos recommandations.
 Si on vous propose un film que vous avez déjà vu, il suffit de le noter pour qu'il ne vous soit plus proposé.
-Si on vous propose de mauvais films, il suffit de leur mettre une mauvaise note."""))
-    
+Si on vous propose de mauvais films, il suffit de leur mettre une mauvaise note."""
+            )
+        )
+
     # --- Section Présentation ---
     st.header(_("Présentation"))
-    st.markdown(_(
-        """Ce projet vise à recommander des films en fonction des notes attribuées par les utilisateurs. À l'ère du numérique, 
+    st.markdown(
+        _(
+            """Ce projet vise à recommander des films en fonction des notes attribuées par les utilisateurs. À l'ère du numérique, 
         les algorithmes de recommandation sont omniprésents et jouent un rôle crucial dans nos choix quotidiens, en suggérant 
         du contenu aligné avec nos préférences.
 
@@ -230,12 +272,14 @@ Ce système s'appuie sur le jeu de données MovieLens, qui contient :
 - **2 864 752 notes** au total (échelle de 0.5 à 5 étoiles)
 - Données à jour jusqu'au 1er mai 2024
 - Multiples genres cinématographiques pour affiner les recommandations"""
-    ))
-    
+        )
+    )
+
     # --- Section Architecture du Modèle ---
     st.header(_("Architecture du Modèle"))
-    st.markdown(_(
-        """Notre système repose sur un **réseau de neurones siamois à deux branches**, une architecture particulièrement 
+    st.markdown(
+        _(
+            """Notre système repose sur un **réseau de neurones siamois à deux branches**, une architecture particulièrement 
         adaptée à l'apprentissage de similarités entre entités hétérogènes.
 
 **Structure du modèle :**
@@ -273,13 +317,19 @@ facilement convertible en note prédite sur l'échelle 0.5-5 étoiles.
 - Les évolutions temporelles des préférences ne sont pas modélisées
 
 Malgré ces limitations, le modèle offre des recommandations fiables et pertinentes."""
-    ))
-    st.image(str(ARCHITECTURE_IMAGE_PATH), caption=_("Architecture du modèle neuronal"), width='stretch')
-    
+        )
+    )
+    st.image(
+        str(ARCHITECTURE_IMAGE_PATH),
+        caption=_("Architecture du modèle neuronal"),
+        width="stretch",
+    )
+
     # --- Section Résultats ---
     st.header(_("Performances du Modèle"))
-    st.markdown(_(
-        """**Capacités du système :**
+    st.markdown(
+        _(
+            """**Capacités du système :**
 
 Le modèle entraîné permet deux types d'utilisation :
 1. **Prédiction de note** : Estimer la note qu'un utilisateur attribuerait à un film non vu
@@ -294,12 +344,14 @@ représente une précision acceptable dans la prédiction des préférences cin�
 
 À titre de comparaison, les systèmes de recommandation professionnels atteignent généralement des RMSE 
 entre 0.25 et 0.40 sur MovieLens, positionnant notre modèle dans une fourchette compétitive."""
-    ))
-    
+        )
+    )
+
     # --- Section Coût et Maintenance ---
     st.header(_("Développement et Déploiement"))
-    st.markdown(_(
-        """**Infrastructure d'entraînement :**
+    st.markdown(
+        _(
+            """**Infrastructure d'entraînement :**
 - Matériel utilisé : MacBook M1 (sans GPU dédié)
 - Temps de préparation des données : ~30 minutes
 - Durée d'entraînement : 35 minutes
@@ -322,15 +374,22 @@ entre 0.25 et 0.40 sur MovieLens, positionnant notre modèle dans une fourchette
 - Modèle hybride combinant filtrage collaboratif et approche content-based
 - A/B testing pour optimiser les hyperparamètres en production
 - Explainability : visualisation des facteurs influençant chaque recommandation"""
-    ))
+        )
+    )
 
 else:
-    st.error(_("L'application n'a pas pu démarrer. Vérifiez les fichiers du modèle et des données."))
+    st.error(
+        _(
+            "L'application n'a pas pu démarrer. Vérifiez les fichiers du modèle et des données."
+        )
+    )
 
 # --- Footer ---
 st.markdown("---")
-st.markdown(_(
-    """
+st.markdown(
+    _(
+        """
     Développé par [Gabriel Marie-Brisson](https://gabriel.mariebrisson.fr)
     """
-))
+    )
+)

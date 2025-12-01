@@ -26,16 +26,16 @@ def format_number(num: float) -> str:
 def generate_markdown_report(results: Dict[str, Any]) -> str:
     """
     Génère un rapport Markdown à partir des résultats de benchmark.
-    
+
     Args:
         results: Dictionnaire contenant benchmark_results et capacity_estimation
-    
+
     Returns:
         Chaîne Markdown formatée
     """
     benchmark_results = results.get("benchmark_results", {})
     capacity = results.get("capacity_estimation", {})
-    
+
     report = f"""# 📊 Performance Benchmark Results
 ## Movie Recommendation System
 
@@ -62,20 +62,20 @@ Ce rapport démontre que le système de recommandation peut gérer **{format_num
 - **Métriques**: Latence d'inférence, pic mémoire, throughput
 
 """
-    
+
     # Détails par scale
     for scale, summary in benchmark_results.items():
         num_users = scale.replace("_users", "")
         report += f"### {num_users} Utilisateurs Concurrents\n\n"
-        
+
         if "error" in summary:
             report += f"❌ **Erreur**: {summary['error']}\n\n"
             continue
-        
+
         if "inference_time" in summary:
             inf_time = summary["inference_time"]
             memory = summary["memory"]
-            
+
             report += f"""
 **Résultats**:
 - ✅ **Taux de succès**: {summary['successful_runs']}/{summary['total_runs']} ({summary['successful_runs']/summary['total_runs']*100:.1f}%)
@@ -87,10 +87,10 @@ Ce rapport démontre que le système de recommandation peut gérer **{format_num
 - ⏱️ **Temps total**: {format_number(summary['total_wall_time_seconds'])} secondes
 
 """
-    
+
     # Estimation de capacité
     report += "## 🌍 Daily Capacity Estimation\n\n"
-    
+
     if "error" not in capacity:
         report += f"""
 Basé sur les résultats du benchmark à **1,000 utilisateurs concurrents**:
@@ -112,7 +112,7 @@ Basé sur les résultats du benchmark à **1,000 utilisateurs concurrents**:
 """
     else:
         report += f"❌ **Erreur**: {capacity['error']}\n\n"
-    
+
     # Analyse de performance
     report += """## 🔍 Performance Analysis
 
@@ -178,27 +178,27 @@ Le système de recommandation démontre une **capacité de production solide** a
 
 *Rapport généré automatiquement par `benchmark_scale.py`*
 """
-    
+
     return report
 
 
 def main():
     """Génère le rapport de benchmark."""
     print("🚀 Running benchmarks and generating report...")
-    
+
     # Exécuter les benchmarks
     results = run_benchmark()
-    
+
     # Générer le rapport Markdown
     report = generate_markdown_report(results)
-    
+
     # Sauvegarder
     output_path = Path(__file__).parent.parent.parent / "BENCHMARK_RESULTS.md"
     output_path.write_text(report, encoding="utf-8")
-    
+
     print(f"\n✅ Report generated: {output_path}")
     print(f"   Report length: {len(report)} characters")
-    
+
     # Afficher un aperçu
     print("\n" + "=" * 60)
     print("📄 REPORT PREVIEW")
@@ -208,4 +208,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
